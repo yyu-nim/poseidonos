@@ -55,6 +55,8 @@
 #include "src/io/general_io/translator.h"
 #include "src/logger/logger.h"
 #include "src/volume/volume_service.h"
+#include "src/telemetry/telemetry_client/telemetry_publisher.h"
+#include "src/telemetry/telemetry_client/easy_telemetry_publisher.h"
 
 namespace pos
 {
@@ -73,7 +75,7 @@ GcFlushSubmission::GcFlushSubmission(std::string arrayName, std::vector<BlkInfo>
     CallbackSmartPtr inputCallback, IBlockAllocator* inputIBlockAllocator,
     IIOSubmitHandler* inputIIOSubmitHandler,
     FlowControl* inputFlowControl, IArrayInfo* inputIArrayInfo)
-: Event(false, BackendEvent_Flush),
+: Callback(false, CallbackType_GcFlushSubmission),
   arrayName(arrayName),
   blkInfoList(blkInfoList),
   volumeId(volumeId),
@@ -86,15 +88,18 @@ GcFlushSubmission::GcFlushSubmission(std::string arrayName, std::vector<BlkInfo>
   iArrayInfo(inputIArrayInfo)
 {
     SetEventType(BackendEvent_Flush);
+    EasyTelemetryPublisherSingleton::Instance()->BufferIncrementCounter(TEL34004_GCFLUSHSUBMISSION_CREATED);
 }
 
 GcFlushSubmission::~GcFlushSubmission(void)
 {
+    EasyTelemetryPublisherSingleton::Instance()->BufferIncrementCounter(TEL34004_GCFLUSHSUBMISSION_DESTROYED);
 }
 
 bool
-GcFlushSubmission::Execute(void)
+GcFlushSubmission::_DoSpecificJob(void)
 {
+    //TelemetryPublisher* tp = EasyTelemetryPublisherSingleton::Instance()->tp();
     const PartitionLogicalSize* udSize =
         iArrayInfo->GetSizeInfo(PartitionType::USER_DATA);
     uint32_t totalBlksPerUserStripe = udSize->blksPerStripe;
@@ -102,6 +107,7 @@ GcFlushSubmission::Execute(void)
     int token = flowControl->GetToken(FlowControlType::GC, totalBlksPerUserStripe);
     if (0 >= token)
     {
+        EasyTelemetryPublisherSingleton::Instance()->BufferIncrementCounter(TEL34004_GCFLUSHSUBMISSION_OUT_OF_TOKEN);
         return false;
     }
 
@@ -112,6 +118,7 @@ GcFlushSubmission::Execute(void)
         {
             flowControl->ReturnToken(FlowControlType::GC, token);
         }
+        EasyTelemetryPublisherSingleton::Instance()->BufferIncrementCounter(TEL34004_GCFLUSHSUBMISSION_FAILED_TO_ALLOC_STRIPE);
         return false;
     }
 
@@ -175,6 +182,8 @@ GcFlushSubmission::Execute(void)
         arrayName,
         logicalStripeId,
         (IOSubmitHandlerStatus::SUCCESS == errorReturned || IOSubmitHandlerStatus::FAIL_IN_SYSTEM_STOP == errorReturned));
+
+    EasyTelemetryPublisherSingleton::Instance()->BufferIncrementCounter(TEL34004_GCFLUSHSUBMISSION_ASYNCIO_CNT);
 
     return (IOSubmitHandlerStatus::SUCCESS == errorReturned || IOSubmitHandlerStatus::FAIL_IN_SYSTEM_STOP == errorReturned);
 }

@@ -67,6 +67,8 @@ private:
     std::mutex frontendQueueLock[FE_QUEUES];
     std::queue<EventSmartPtr> workerCommonQueue;
     std::mutex workerQueueLock;
+
 };
+static const string METRIC_BE_RATIO_POLICY_SHARD_ID = "backend_event_ratio_policy";
 
 } // namespace pos

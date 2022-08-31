@@ -42,6 +42,7 @@
 #include "src/event_scheduler/event_scheduler.h"
 #include "src/qos/qos_manager.h"
 #include "src/event_scheduler/backend_policy.h"
+#include "src/telemetry/telemetry_client/easy_telemetry_publisher.h"
 
 // #pragma GCC optimize("O0")
 
@@ -129,9 +130,18 @@ EventWorker::Run(void)
         bool done = event->Execute();
         eventScheduler->CheckAndSetQueueOccupancy(event->GetEventType());
         running = false;
+
+        vector<pair<string, string>> labels = {
+            { "backend_event", std::to_string((int) (event->GetEventType()) ) },
+            { "worker_id", std::to_string( this->id ) }
+        };
+        std::string shardId = "event_worker_id" + std::to_string(this->id);
         if (done == false)
         {
+            EasyTelemetryPublisherSingleton::Instance()->ShardedBufferIncrementCounter(shardId, TEL130016_EVENTWORKER_RETRY_CNT, 1, labels);
             eventScheduler->EnqueueEvent(event);
+        } else {
+            EasyTelemetryPublisherSingleton::Instance()->ShardedBufferIncrementCounter(shardId, TEL130016_EVENTWORKER_SUCCESS_CNT, 1, labels);
         }
     }
 }

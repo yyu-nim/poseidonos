@@ -174,7 +174,9 @@ private:
     int ioDirection;
     EventSmartPtr callback;
     TelemetryPublisher* telemetryPublisher;
-    std::atomic<uint64_t> issuedIoCnt;
+
+    std::atomic<uint64_t> flushIssueCount;
+    std::atomic<uint64_t> loadIssueCount;
 };
 
 } // namespace pos

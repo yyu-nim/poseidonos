@@ -45,6 +45,7 @@
 #include "src/array_models/dto/partition_logical_size.h"
 #include "assert.h"
 #include "src/allocator/context_manager/segment_ctx/segment_ctx.h"
+#include "src/telemetry/telemetry_client/easy_telemetry_publisher.h"
 
 namespace pos
 {
@@ -182,6 +183,9 @@ FlowControl::GetToken(FlowControlType type, int token)
     int oldBucket = bucket[type].load();
     do
     {
+        EasyTelemetryPublisherSingleton::Instance()->BufferUpdateGauge(TEL34009_FLOWCONTROL_OLDBUCKET_USER_TOKEN, bucket[FlowControlType::USER]);
+        EasyTelemetryPublisherSingleton::Instance()->BufferUpdateGauge(TEL34009_FLOWCONTROL_OLDBUCKET_GC_TOKEN, bucket[FlowControlType::GC]);
+
         if (oldBucket <= 0)
         {
             if (refillTokenMutex.try_lock())
@@ -190,19 +194,30 @@ FlowControl::GetToken(FlowControlType type, int token)
                 refillTokenMutex.unlock();
                 if (false == ret)
                 {
+                    EasyTelemetryPublisherSingleton::Instance()->BufferIncrementCounter(TEL34009_FLOWCONTROL_WAITFOR_PEER_TOKENCONSUMPTION);
                     return 0;
                 }
                 if (0 >= bucket[type].load())
                 {
+                    EasyTelemetryPublisherSingleton::Instance()->BufferIncrementCounter(TEL34009_FLOWCONTROL_RUN_OUT_OF_MY_TOKEN); // yyu: "not reachable is expected"
                     return 0;
                 }
             }
             else
             {
+                EasyTelemetryPublisherSingleton::Instance()->BufferIncrementCounter(TEL34009_FLOWCONTROL_REFILLCONFLICT_RETURN);
                 return 0;
+            }
+        } else {
+            EasyTelemetryPublisherSingleton::Instance()->BufferIncrementCounter(TEL34009_FLOWCONTROL_POSITIVE_OLDBUCKET_TOKEN);
+            if( (oldBucket - token) < 0 ) {
+                EasyTelemetryPublisherSingleton::Instance()->BufferIncrementCounter(TEL34009_FLOWCONTROL_NEGATIVE_NEWBUCKET_TOKEN);
             }
         }
     } while (!bucket[type].compare_exchange_weak(oldBucket, oldBucket - token));
+
+    EasyTelemetryPublisherSingleton::Instance()->BufferUpdateGauge(TEL34009_FLOWCONTROL_USERBUCKET_TOKEN, bucket[FlowControlType::USER]);
+    EasyTelemetryPublisherSingleton::Instance()->BufferUpdateGauge(TEL34009_FLOWCONTROL_GCBUCKET_TOKEN, bucket[FlowControlType::GC]);
 
     return token;
 }
@@ -222,6 +237,12 @@ FlowControl::ReturnToken(FlowControlType type, int token)
     }
 
     bucket[type].fetch_add(token);
+
+    if (type == FlowControlType::USER ) {
+        EasyTelemetryPublisherSingleton::Instance()->BufferUpdateGauge(TEL34009_FLOWCONTROL_RETURN_USERTOKEN, bucket[type]);
+    } else {
+        EasyTelemetryPublisherSingleton::Instance()->BufferUpdateGauge(TEL34009_FLOWCONTROL_RETURN_GCTOKEN, bucket[type]);
+    }
 }
 
 void
@@ -263,6 +284,12 @@ FlowControl::_RefillToken(FlowControlType type)
     bucket[FlowControlType::USER].fetch_add(userToken);
     bucket[FlowControlType::GC].fetch_add(gcToken);
 
+    if (type == FlowControlType::USER ) {
+        EasyTelemetryPublisherSingleton::Instance()->BufferUpdateGauge(TEL34009_FLOWCONTROL_REFILL_USERTOKEN, bucket[FlowControlType::USER]);
+    } else {
+        EasyTelemetryPublisherSingleton::Instance()->BufferUpdateGauge(TEL34009_FLOWCONTROL_REFILL_GCTOKEN, bucket[FlowControlType::GC]);
+    }
+
     return true;
 }
 
@@ -270,6 +297,13 @@ bool
 FlowControl::_TryForceResetToken(FlowControlType type)
 {
     int counterType = type ^ 0x1;
+
+    EasyTelemetryPublisherSingleton::Instance()->BufferUpdateGauge(TEL34009_FLOWCONTROL_RESET_COUNTER_TYPE, counterType);
+    EasyTelemetryPublisherSingleton::Instance()->BufferUpdateGauge(TEL34009_FLOWCONTROL_RESET_PREVBUCKET_USERTOKEN, bucket[FlowControlType::USER]);
+    EasyTelemetryPublisherSingleton::Instance()->BufferUpdateGauge(TEL34009_FLOWCONTROL_RESET_PREVBUCKET_GCTOKEN, bucket[FlowControlType::GC]);
+    EasyTelemetryPublisherSingleton::Instance()->BufferUpdateGauge(TEL34009_FLOWCONTROL_RESET_CURRBUCKET_USERTOKEN, bucket[FlowControlType::USER]);
+    EasyTelemetryPublisherSingleton::Instance()->BufferUpdateGauge(TEL34009_FLOWCONTROL_RESET_CURRBUCKET_GCTOKEN, bucket[FlowControlType::GC]);
+
     if (previousBucket[counterType] != bucket[counterType])
     {
         previousBucket[counterType] = bucket[counterType].load();
@@ -277,6 +311,8 @@ FlowControl::_TryForceResetToken(FlowControlType type)
         {
             isForceReset = false;
         }
+        EasyTelemetryPublisherSingleton::Instance()->BufferIncrementCounter(TEL34009_FLOWCONTROL_RESET_UPDATE_PREVBUCKET_RETURN);
+
         return false;
     }
 
@@ -284,11 +320,14 @@ FlowControl::_TryForceResetToken(FlowControlType type)
     {
         systemTimeoutChecker->SetTimeout(flowControlConfiguration->GetForceResetTimeout());
         isForceReset = true;
+
+        EasyTelemetryPublisherSingleton::Instance()->BufferIncrementCounter(TEL34009_FLOWCONTROL_RESET_SET_TIMEOUT_RETURN);
         return false;
     }
 
     if (false == systemTimeoutChecker->CheckTimeout())
     {
+        EasyTelemetryPublisherSingleton::Instance()->BufferIncrementCounter(TEL34009_FLOWCONTROL_RESET_NOTIMEOUT_YET_RETURN);
         return false;
     }
 
@@ -300,6 +339,8 @@ FlowControl::_TryForceResetToken(FlowControlType type)
         "userPrevBucket:{}, gcPrevBucket:{}, gcThreshold:{}, freeSegments:{}",
         previousBucket[FlowControlType::USER], previousBucket[FlowControlType::GC],
         gcThreshold, freeSegments);
+
+    EasyTelemetryPublisherSingleton::Instance()->BufferIncrementCounter(TEL34009_FLOWCONTROL_RESET_SUCCESSFUL);
 
     return true;
 }

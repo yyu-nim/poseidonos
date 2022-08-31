@@ -40,13 +40,13 @@
 
 #include "gc_map_update_completion.h"
 #include "src/event_scheduler/callback.h"
-#include "src/event_scheduler/event.h"
 #include "src/include/address_type.h"
 #include "src/include/smart_ptr_type.h"
 #include "src/journal_manager/log/gc_map_update_list.h"
 #include "src/mapper/i_vsamap.h"
 #include "src/mapper/include/mpage_info.h"
 #include "src/meta_service/i_meta_updater.h"
+#include "src/logger/logger.h"
 
 namespace pos
 {
@@ -56,7 +56,7 @@ class EventScheduler;
 class GcStripeManager;
 class IArrayInfo;
 
-class GcMapUpdateRequest : public Event
+class GcMapUpdateRequest : public Callback
 {
 public:
     GcMapUpdateRequest(void) = default;
@@ -67,9 +67,10 @@ public:
         IVSAMap* inputIVSAMap,
         IArrayInfo* inputIArrayInfo,
         IMetaUpdater* inputMetaUpdater);
-    virtual bool Execute(void) override;
 
 private:
+    virtual bool _DoSpecificJob(void) override;
+
     bool _BuildMeta(void);
     bool _UpdateMeta(void);
     void _AddBlockMapUpdateLog(BlkAddr rba, VirtualBlkAddr writeVsa);
@@ -92,6 +93,7 @@ private:
 
     MpageList volumeDirtyList;
     GcStripeMapUpdateList mapUpdates;
+    ChangeLogger<int> changeLogger;
 };
 } // namespace pos
 

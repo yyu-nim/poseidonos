@@ -61,6 +61,7 @@ public:
         logWriteHandler = new LogWriteHandler(logWriteStats, waitingList);
 
         ON_CALL(*bufferAllocator, GetLogGroupId).WillByDefault(Return(0));
+        ON_CALL(*config, GetNumLogGroups).WillByDefault(Return(2));
     }
 
     virtual void

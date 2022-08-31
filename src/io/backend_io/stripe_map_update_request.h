@@ -36,6 +36,7 @@
 
 #include "src/event_scheduler/callback.h"
 #include "src/io/general_io/io_submit_handler.h"
+#include "src/logger/logger.h"
 
 namespace pos
 {
@@ -60,6 +61,7 @@ private:
     EventScheduler* eventScheduler;
     CallbackSmartPtr completionEvent;
     int arrayId;
+    ChangeLogger<int> changeLogger;
 };
 
 } // namespace pos

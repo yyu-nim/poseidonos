@@ -54,6 +54,10 @@
 #include "src/logger/logger.h"
 #include "src/mapper/mapper.h"
 #include "src/mapper_service/mapper_service.h"
+#include "src/gc/gc_map_update_request.h"
+#include "src/event_scheduler/event_scheduler.h"
+#include "src/telemetry/telemetry_client/telemetry_publisher.h"
+#include "src/telemetry/telemetry_client/easy_telemetry_publisher.h"
 
 namespace pos
 {
@@ -78,15 +82,18 @@ GcFlushCompletion::GcFlushCompletion(StripeSmartPtr stripe, std::string& arrayNa
   rbaStateManager(inputRbaStateManager),
   iArrayInfo(inputIArrayInfo)
 {
+    EasyTelemetryPublisherSingleton::Instance()->BufferIncrementCounter(TEL34005_GCFLUSHCOMPLETION_CREATED);
 }
 
 GcFlushCompletion::~GcFlushCompletion(void)
 {
+    EasyTelemetryPublisherSingleton::Instance()->BufferIncrementCounter(TEL34005_GCFLUSHCOMPLETION_DESTROYED);
 }
 
 bool
 GcFlushCompletion::_DoSpecificJob(void)
 {
+    //TelemetryPublisher* tp = EasyTelemetryPublisherSingleton::Instance()->tp();
     if (nullptr != dataBuffer)
     {
         gcStripeManager->ReturnBuffer(dataBuffer);
@@ -122,6 +129,7 @@ GcFlushCompletion::_DoSpecificJob(void)
         rbaList);
     if (false == ownershipAcquired)
     {
+        EasyTelemetryPublisherSingleton::Instance()->BufferIncrementCounter(TEL34005_GCFLUSHCOMPLETION_FAILED_TO_ACQUIRE_OWNERSHIP);
         return false;
     }
 
@@ -140,6 +148,12 @@ GcFlushCompletion::_DoSpecificJob(void)
     StripeId userLsid = stripe->GetUserLsid();
     stripe->Flush(event);
 
+    
+    POS_TRACE_DEBUG(EID(GC_ACQUIRE_OWNERSHIP_RBA_LIST),
+            "acquire ownership copied rba list, arrayName:{}, stripeUserLsid:{}",
+            arrayName, userLsid);
+
+    EasyTelemetryPublisherSingleton::Instance()->BufferIncrementCounter(TEL34005_GCFLUSHCOMPLETION_SUCCESS);
     POS_TRACE_DEBUG(EID(GC_ACQUIRE_OWNERSHIP_RBA_LIST),
         "acquire ownership copied rba list, arrayName:{}, stripeUserLsid:{}",
         arrayName, userLsid);

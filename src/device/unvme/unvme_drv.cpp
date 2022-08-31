@@ -88,7 +88,7 @@ AsyncIOComplete(void* ctx, const struct spdk_nvme_cpl* completion)
     if (likely(!ioCtx->IsAsyncIOCompleted()))
     {
         devCtx->DecreasePendingIO();
-        airlog("CNT_PendingIO", "ssd", ssdId, -1);
+        airlog("CNT_PendingIONeg", "ssd", ssdId, 1);
         airlog("SSD_Complete", "internal", ssdId, 1);
         if (unlikely(ioCtx->IsAdminCommand()))
         {

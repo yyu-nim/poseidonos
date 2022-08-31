@@ -469,11 +469,18 @@ SegmentId
 SegmentCtx::AllocateGCVictimSegment(void)
 {
     SegmentId victimSegmentId = UNMAP_SEGMENT;
+    uint64_t loopCount = 0;
     while ((victimSegmentId = _FindMostInvalidSSDSegment()) != UNMAP_SEGMENT)
     {
         bool successToSetVictim = _SetVictimSegment(victimSegmentId);
         if (successToSetVictim == true) break;
+        if( loopCount % 10000 == 0 ){
+            POS_TRACE_INFO(EID(ALLOCATOR_START),
+                "[SegmentCtx::AllocateGCVictimSegment] loopCount: {}", loopCount);
+        }
+        loopCount += 1;
     }
+    //tp->IncrementCounter(TEL34002_SEGMENTCTX_ALLOC_GCVICTIM_LOOP, loopCount);// wondering if this causes a positive side effect
 
     return victimSegmentId;
 }

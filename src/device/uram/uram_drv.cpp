@@ -75,7 +75,7 @@ AsyncIOComplete(struct spdk_bdev_io* bdev_io, bool success, void* cb_arg)
     }
 
     devCtx->DecreasePendingIO();
-    airlog("CNT_PendingIO", "nvram", ramId, -1);
+    airlog("CNT_PendingIONeg", "nvram", ramId, 1);
     ioCtx->CompleteIo(IOErrorType);
 
     delete ioCtx;

@@ -330,14 +330,16 @@ TelemetryAirDelegator::RegisterAirEvent(void)
 {
     air_request_data(
         {"PERF_ARR_VOL", "PERF_PORT", "LAT_ARR_VOL_READ", "LAT_ARR_VOL_WRITE", "PERF_SSD_Read",
-            "PERF_SSD_Write", "CNT_PendingIO", "VolumeIo_Constructor", "VolumeIo_Destructor",
+            "PERF_SSD_Write", "CNT_PendingIO", "CNT_PendingIONeg", "VolumeIo_Constructor", "VolumeIo_Destructor",
             "Ubio_Constructor", "Ubio_Destructor", "SSD_Submit", "SSD_Complete", "EventQueue_Push",
             "WorkerCommonQueue_Push", "WorkerCommonQueue_Pop", "Callback_Constructor", "Callback_Destructor",
             "Event_Constructor", "Event_Destructor", "IOWorker_Submit", "IOWorker_Complete",
             "RequestedUserRead", "RequestedUserWrite", "RequestedUserAdminIo",
             "CompleteUserRead", "CompleteUserWrite", "CompleteUserAdminIo",
             "UserFlushProcess", "PartialWriteProcess", "UserFailIo",
-            "UserReadPendingCnt", "UserWritePendingCnt", "InternalIoPendingCnt", "TimeOutIoCnt"},
+            "UserReadPendingCnt", "UserWritePendingCnt", "InternalIoPendingCnt",
+            "UserReadPendingCnt", "UserReadPendingCntNeg",
+            "InternalIoPendingCnt", "InternalIoPendingCntNeg", "Q_EventQueue", "Q_IOQueue", "TimeOutIoCnt"},
         std::move(dataHandler));
 }
 

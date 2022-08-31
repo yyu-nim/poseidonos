@@ -35,6 +35,8 @@
 #include "src/include/meta_const.h"
 #include "src/logger/logger.h"
 #include "src/resource_manager/buffer_pool.h"
+#include "src/telemetry/telemetry_client/telemetry_client.h"
+#include "src/telemetry/telemetry_client/easy_telemetry_publisher.h"
 
 #include <string>
 
@@ -72,12 +74,18 @@ CopierMeta::CopierMeta(IArrayInfo* array, const PartitionLogicalSize* udSize,
     {
         _CreateBufferPool(array->GetSizeInfo(PartitionType::USER_DATA)->chunksPerStripe, CHUNK_SIZE);
     }
+
+    EasyTelemetryPublisherSingleton::Instance()->BufferIncrementCounter(TEL34001_GC_COPIERMETA_CREATED);
     InitProgressCount();
 }
 
 
 CopierMeta::~CopierMeta(void)
 {
+    //yyu: I understand this would be a leak, and need a better cleanup if we are to merge this change into main. Currently, the change is for adhoc debugging.
+    //delete tp;
+    EasyTelemetryPublisherSingleton::Instance()->BufferIncrementCounter(TEL34001_GC_COPIERMETA_DESTROYED);
+
     for (uint32_t index = 0; index < GC_BUFFER_COUNT; index++)
     {
         if (nullptr != (*gcBufferPool)[index])
@@ -131,18 +139,21 @@ void
 CopierMeta::SetStartCopyStripes(void)
 {
     requestStripeCount++;
+    EasyTelemetryPublisherSingleton::Instance()->BufferUpdateGauge(TEL34001_GC_COPIERMETA_REQUEST_STRIPE_CNT, requestStripeCount);
 }
 
 void
 CopierMeta::SetStartCopyBlks(uint32_t blocks)
 {
     requestBlockCount.fetch_add(blocks);
+    EasyTelemetryPublisherSingleton::Instance()->BufferUpdateGauge(TEL34001_GC_COPIERMETA_REQUEST_BLK_CNT, requestBlockCount);
 }
 
 void
 CopierMeta::SetDoneCopyBlks(uint32_t blocks)
 {
     doneBlockCount.fetch_add(blocks);
+    EasyTelemetryPublisherSingleton::Instance()->BufferUpdateGauge(TEL34001_GC_COPIERMETA_DONE_BLK_CNT, doneBlockCount);
 }
 
 uint32_t
@@ -163,6 +174,11 @@ CopierMeta::InitProgressCount(void)
     requestStripeCount = 0;
     requestBlockCount = 0;
     doneBlockCount = 0;
+
+    EasyTelemetryPublisherSingleton::Instance()->BufferUpdateGauge(TEL34001_GC_COPIERMETA_REQUEST_STRIPE_CNT, 0);
+    EasyTelemetryPublisherSingleton::Instance()->BufferUpdateGauge(TEL34001_GC_COPIERMETA_REQUEST_BLK_CNT, 0);
+    EasyTelemetryPublisherSingleton::Instance()->BufferUpdateGauge(TEL34001_GC_COPIERMETA_DONE_BLK_CNT, 0);
+
 }
 
 uint32_t
@@ -172,6 +188,7 @@ CopierMeta::SetInUseBitmap(void)
     uint32_t retVal = victimSegmentIndex;
     victimSegmentIndex++;
     victimSegmentIndex = victimSegmentIndex % GC_VICTIM_SEGMENT_COUNT;
+    EasyTelemetryPublisherSingleton::Instance()->BufferUpdateGauge(TEL34001_GC_COPIERMETA_VICTIM_SEG_IDX, retVal);
 
     return retVal;
 }
@@ -205,11 +222,14 @@ CopierMeta::IsCopyDone(void)
 {
     if (STRIPES_PER_SEGMENT != requestStripeCount)
     {
+        EasyTelemetryPublisherSingleton::Instance()->BufferIncrementCounter(TEL34001_GC_COPIERMETA_REQUEST_STRIPECNT_NOMATCH);
         return false;
     }
 
+    // TODO: 값들을 체크해볼 것.
     if (requestBlockCount != doneBlockCount)
     {
+        EasyTelemetryPublisherSingleton::Instance()->BufferIncrementCounter(TEL34001_GC_COPIERMETA_REQUEST_DONE_NOMATCH);
         return false;
     }
     InitProgressCount();

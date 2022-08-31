@@ -33,7 +33,7 @@
 #pragma once
 
 #include "src/io_submit_interface/i_io_submit_handler.h"
-#include "src/event_scheduler/event.h"
+#include "src/event_scheduler/callback.h"
 #include "src/gc/victim_stripe.h"
 #include "src/gc/gc_stripe_manager.h"
 #include "src/include/smart_ptr_type.h"
@@ -48,7 +48,7 @@ namespace pos
 class Stripe;
 class FlowControl;
 
-class GcFlushSubmission : public Event
+class GcFlushSubmission : public Callback
 {
 public:
     explicit GcFlushSubmission(std::string arrayName, std::vector<BlkInfo>* blkInfoList, uint32_t volumeId,
@@ -59,9 +59,10 @@ public:
                     IIOSubmitHandler* inputIIOSubmitHandler,
                     FlowControl* inputFlowControl, IArrayInfo* inputIArrayInfo);
     ~GcFlushSubmission(void) override;
-    bool Execute(void) override;
 
 private:
+    virtual bool _DoSpecificJob(void) override;
+
     Stripe* _AllocateStripe(uint32_t volumeId);
 
     std::string arrayName;

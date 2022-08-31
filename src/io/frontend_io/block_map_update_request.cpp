@@ -42,6 +42,7 @@
 #include "src/spdk_wrapper/event_framework_api.h"
 #include "src/meta_service/meta_service.h"
 #include "src/io/frontend_io/block_map_update_completion.h"
+#include "src/telemetry/telemetry_client/easy_telemetry_publisher.h"
 
 #include <memory>
 
@@ -116,6 +117,7 @@ BlockMapUpdateRequest::_UpdateMeta(void)
         if (unlikely(result != 0))
         {
             POS_TRACE_ERROR_CONDITIONALLY(&changeLogger, result, result, "Write wraup failed at map update ");
+            EasyTelemetryPublisherSingleton::Instance()->BufferIncrementCounter(TEL36008_JRN_BLOCK_LOG_WRITE_FAILED);
             return false;
         }
     }

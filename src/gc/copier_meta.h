@@ -113,6 +113,9 @@ private:
     std::vector<std::vector<VictimStripe*>>* victimStripes;
     std::vector<BufferPool*>* gcBufferPool;
     MemoryManager* memoryManager;
+
+    static TelemetryPublisher* tp;
+    static std::mutex publisherLock;
 };
 
 } // namespace pos

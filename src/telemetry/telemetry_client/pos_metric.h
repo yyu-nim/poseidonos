@@ -107,6 +107,8 @@ public:
     virtual POSHistogramValue* GetHistogramValue(void);
     virtual MetricLabelMap* GetLabelList(void);
 
+    virtual size_t Hash(void);
+
 private:
     POSMetricTypes type;       // Mandatory
     std::string name;          // Mandatory

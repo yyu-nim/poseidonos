@@ -42,6 +42,7 @@
 #include "src/mapper/include/mapper_const.h"
 #include "src/meta_file_intf/meta_file_intf.h"
 #include "src/telemetry/telemetry_client/telemetry_publisher.h"
+#include "src/telemetry/telemetry_client/easy_telemetry_publisher.h"
 
 namespace pos
 {
@@ -57,13 +58,16 @@ ReverseMapPack::ReverseMapPack(void)
   ioDirection(0),
   callback(nullptr),
   telemetryPublisher(nullptr),
-  issuedIoCnt(0)
+  flushIssueCount(0),
+  loadIssueCount(0)
 {
+    EasyTelemetryPublisherSingleton::Instance()->BufferIncrementCounter(TEL33015_REVMAPPACK_CREATED);
 }
 
 // LCOV_EXCL_START
 ReverseMapPack::~ReverseMapPack(void)
 {
+    EasyTelemetryPublisherSingleton::Instance()->BufferIncrementCounter(TEL33015_REVMAPPACK_DESTROYED);
     for (auto& revMap : revMaps)
     {
         if (revMap != nullptr)
@@ -81,6 +85,7 @@ ReverseMapPack::~ReverseMapPack(void)
 void
 ReverseMapPack::Init(MetaFileIntf* file, StripeId wbLsid_, StripeId vsid_, uint32_t mpageSize_, uint32_t numMpagesPerStripe_, TelemetryPublisher* tp)
 {
+    EasyTelemetryPublisherSingleton::Instance()->BufferIncrementCounter(TEL33015_REVMAPPACK_INIT);
     mapFlushState = MapFlushState::FLUSH_DONE;
     revMapfile = file;
     wbLsid = wbLsid_;
@@ -100,6 +105,7 @@ ReverseMapPack::Init(MetaFileIntf* file, StripeId wbLsid_, StripeId vsid_, uint3
 void
 ReverseMapPack::Assign(StripeId vsid_)
 {
+    EasyTelemetryPublisherSingleton::Instance()->BufferIncrementCounter(TEL33015_REVMAPPACK_ASSIGN);
     assert(mapFlushState == MapFlushState::FLUSH_DONE);
     vsid = vsid_;
     _SetHeader(wbLsid, vsid);
@@ -109,8 +115,10 @@ ReverseMapPack::Assign(StripeId vsid_)
 int
 ReverseMapPack::Load(uint64_t fileOffset, EventSmartPtr cb, uint32_t vsid)
 {
+    EasyTelemetryPublisherSingleton::Instance()->BufferIncrementCounter(TEL33015_REVMAPPACK_LOAD);
     ioDirection = IO_LOAD;
     ioError = 0;
+    loadIssueCount = 0;
     mfsAsyncIoDonePages = 0;
     mapFlushState = MapFlushState::FLUSHING;
     uint64_t pageNum = 0;
@@ -118,6 +126,8 @@ ReverseMapPack::Load(uint64_t fileOffset, EventSmartPtr cb, uint32_t vsid)
 
     for (auto& revMap : revMaps)
     {
+        EasyTelemetryPublisherSingleton::Instance()->BufferIncrementCounter(TEL34006_REVMAP_LOAD_CNT);
+
         RevMapPageAsyncIoCtx* revMapPageAsyncIoReq = new RevMapPageAsyncIoCtx();
         revMapPageAsyncIoReq->opcode = MetaFsIoOpcode::Read;
         revMapPageAsyncIoReq->fd = revMapfile->GetFd();
@@ -128,8 +138,14 @@ ReverseMapPack::Load(uint64_t fileOffset, EventSmartPtr cb, uint32_t vsid)
         revMapPageAsyncIoReq->mpageNum = pageNum++;
         revMapPageAsyncIoReq->vsid = vsid;
         int ret = revMapfile->AsyncIO(revMapPageAsyncIoReq);
+
+        vector<pair<string, string>> labels = {
+                {"fd", std::to_string( revMapfile->GetFd() ) }
+        };
         if (ret < 0)
         {
+            EasyTelemetryPublisherSingleton::Instance()->BufferIncrementCounter(TEL33015_REVMAPPACK_FAILED_TO_ISSUE_LOAD_CNT, 1, labels);
+
             POS_TRACE_ERROR(EID(MFS_ASYNCIO_ERROR), "[ReverseMapPack] Error!, Calling AsyncIO Failed at RevMap LOAD, mpageNum:{}",
                 revMapPageAsyncIoReq->mpageNum);
             ioError = ret;
@@ -137,6 +153,20 @@ ReverseMapPack::Load(uint64_t fileOffset, EventSmartPtr cb, uint32_t vsid)
             callback = nullptr;
             break;
         }
+        else
+        {
+            EasyTelemetryPublisherSingleton::Instance()->BufferIncrementCounter(TEL33015_REVMAPPACK_SUCCEEDED_TO_ISSUE_LOAD_CNT, 1, labels);
+            loadIssueCount++;
+        }
+    }
+
+    if (telemetryPublisher)
+    {
+        POSMetric metric(TEL33013_MAP_REVERSE_LOAD_IO_ISSUED_CNT, POSMetricTypes::MT_COUNT);
+        metric.SetCountValue(loadIssueCount);
+        telemetryPublisher->PublishMetric(metric);
+
+        loadIssueCount = 0;
     }
     return ioError;
 }
@@ -146,6 +176,7 @@ ReverseMapPack::Flush(Stripe* stripe, uint64_t fileOffset, EventSmartPtr cb, uin
 {
     ioDirection = IO_FLUSH;
     ioError = 0;
+    flushIssueCount = 0;
     mfsAsyncIoDonePages = 0;
     uint64_t pageNum = 0;
     assert(callback == nullptr);
@@ -164,8 +195,12 @@ ReverseMapPack::Flush(Stripe* stripe, uint64_t fileOffset, EventSmartPtr cb, uin
         revMapPageAsyncIoReq->stripeToFlush = stripe;
         revMapPageAsyncIoReq->vsid = vsid;
         int ret = revMapfile->AsyncIO(revMapPageAsyncIoReq);
+        vector<pair<string, string>> labels = {
+                {"fd", std::to_string( revMapfile->GetFd() ) }
+        };
         if (ret < 0)
         {
+            EasyTelemetryPublisherSingleton::Instance()->BufferIncrementCounter(TEL33015_REVMAPPACK_FAILED_TO_ISSUE_FLUSH_CNT, 1, labels);
             POS_TRACE_ERROR(EID(MFS_ASYNCIO_ERROR),
                 "[ReverseMapPack] Error!, Calling AsyncIO Failed at RevMap FLUSH, mpageNum:{}",
                 revMapPageAsyncIoReq->mpageNum);
@@ -174,15 +209,20 @@ ReverseMapPack::Flush(Stripe* stripe, uint64_t fileOffset, EventSmartPtr cb, uin
             callback = nullptr;
             break;
         }
-        issuedIoCnt++;
+        else
+        {
+            EasyTelemetryPublisherSingleton::Instance()->BufferIncrementCounter(TEL33015_REVMAPPACK_SUCCEEDED_TO_ISSUE_FLUSH_CNT, 1, labels);
+            flushIssueCount++;
+        }
     }
 
     if (telemetryPublisher)
     {
         POSMetric metric(TEL33011_MAP_REVERSE_FLUSH_IO_ISSUED_CNT, POSMetricTypes::MT_COUNT);
-        metric.SetCountValue(issuedIoCnt);
+        metric.SetCountValue(flushIssueCount);
         telemetryPublisher->PublishMetric(metric);
-        issuedIoCnt = 0;
+
+        flushIssueCount = 0;
     }
 
     return ioError;
@@ -221,9 +261,11 @@ ReverseMapPack::GetReverseMapEntry(uint64_t offset)
 void
 ReverseMapPack::WaitPendingIoDone(void)
 {
+    EasyTelemetryPublisherSingleton::Instance()->BufferIncrementCounter(TEL33015_REVMAPPACK_WAITING_PENDING_IO_ENTER_CNT);
     while (mapFlushState == MapFlushState::FLUSHING)
     {
     }
+    EasyTelemetryPublisherSingleton::Instance()->BufferIncrementCounter(TEL33015_REVMAPPACK_WAITING_PENDING_IO_EXIT_CNT);
 }
 
 void
@@ -238,9 +280,14 @@ ReverseMapPack::_SetHeader(StripeId wblsid_, StripeId vsid_)
 void
 ReverseMapPack::_RevMapPageIoDone(AsyncMetaFileIoCtx* ctx)
 {
+    vector<pair<string, string>> labels = {
+            { "fd", std::to_string(ctx->fd) }
+    };
+
     RevMapPageAsyncIoCtx* revMapPageAsyncIoReq = static_cast<RevMapPageAsyncIoCtx*>(ctx);
     if (revMapPageAsyncIoReq->error != 0)
     {
+        EasyTelemetryPublisherSingleton::Instance()->BufferIncrementCounter(TEL33015_REVMAPPACK_REVMAP_PAGE_IO_DONE_ERROR, 1, labels);
         ioError = revMapPageAsyncIoReq->error;
         POS_TRACE_ERROR(EID(MFS_ASYNCIO_ERROR),
             "[ReverseMapPack] Error!, MFS AsyncIO error, ioError:{} mpageNum:{}", ioError, revMapPageAsyncIoReq->mpageNum);
@@ -275,18 +322,32 @@ ReverseMapPack::_RevMapPageIoDone(AsyncMetaFileIoCtx* ctx)
         }
         if (callback != nullptr)
         {
+            EasyTelemetryPublisherSingleton::Instance()->BufferIncrementCounter(TEL33015_REVMAPPACK_REVMAP_PAGE_IO_DONE_ENQ_CALLBACK, 1, labels);
             EventSchedulerSingleton::Instance()->EnqueueEvent(callback);
             callback = nullptr;
+        } else {
+            EasyTelemetryPublisherSingleton::Instance()->BufferIncrementCounter(TEL33015_REVMAPPACK_REVMAP_PAGE_IO_DONE_CALLBACK_NULL, 1, labels);
         }
+    } else {
+        EasyTelemetryPublisherSingleton::Instance()->BufferIncrementCounter(TEL33015_REVMAPPACK_REVMAP_PAGE_IO_DONE_BEFORE_LAST, 1, labels);
     }
 
     delete ctx;
 
     if (telemetryPublisher)
     {
-        POSMetric metric(TEL33012_MAP_REVERSE_FLUSH_IO_DONE_CNT, POSMetricTypes::MT_COUNT);
-        metric.SetCountValue(1);
-        telemetryPublisher->PublishMetric(metric);
+        if (ioDirection == IO_LOAD)
+        {
+            POSMetric metric(TEL33014_MAP_REVERSE_LOAD_IO_DONE_CNT, POSMetricTypes::MT_COUNT);
+            metric.SetCountValue(1);
+            telemetryPublisher->PublishMetric(metric);
+        }
+        else
+        {
+            POSMetric metric(TEL33012_MAP_REVERSE_FLUSH_IO_DONE_CNT, POSMetricTypes::MT_COUNT);
+            metric.SetCountValue(1);
+            telemetryPublisher->PublishMetric(metric);
+        }
     }
 }
 

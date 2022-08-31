@@ -74,6 +74,10 @@ enum CallbackType
     CallbackType_PosReplicatorIOCompletion,
     CallbackType_GcLogWrite,
     CallbackType_BackendLogWriteDone,
+    CallbackType_MetaUpdate,
+    CallbackType_GcMapUpdateRequest,
+    CallbackType_GcFlushSubmission,
+    CallbackType_GcMapUpdateCompletion,
     Total_CallbackType_Cnt
 };
 }

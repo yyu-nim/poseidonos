@@ -35,6 +35,7 @@
 #include <air/Air.h>
 
 #include <memory>
+#include <chrono>
 #include <vector>
 
 #include "src/allocator/i_block_allocator.h"
@@ -51,6 +52,8 @@
 #include "src/io/general_io/translator.h"
 #include "src/logger/logger.h"
 #include "src/volume/volume_service.h"
+#include "src/include/meta_const.h"
+#include "src/telemetry/telemetry_client/easy_telemetry_publisher.h"
 
 namespace pos
 {
@@ -79,26 +82,37 @@ CopierReadCompletion::CopierReadCompletion(VictimStripe* victimStripe, uint32_t 
 {
     list<BlkInfo> blkInfoList = victimStripe->GetBlkInfoList(listIndex);
     blkCnt = blkInfoList.size();
+    EasyTelemetryPublisherSingleton::Instance()->BufferIncrementCounter(TEL34003_COPIERREADCOMPLETION_CREATED);
 }
 
 CopierReadCompletion::~CopierReadCompletion(void)
 {
+    EasyTelemetryPublisherSingleton::Instance()->BufferIncrementCounter(TEL34003_COPIERREADCOMPLETION_DESTROYED);
 }
 
 bool
 CopierReadCompletion::_DoSpecificJob(void)
 {
+    //TelemetryPublisher* tp = EasyTelemetryPublisherSingleton::Instance()->tp();
+    EasyTelemetryPublisherSingleton::Instance()->BufferIncrementCounter(TEL34003_COPIERREADCOMPLETION_DO_JOB);
+
     GcStripeManager* gcStripeManager = meta->GetGcStripeManager();
     list<BlkInfo> blkInfoList = victimStripe->GetBlkInfoList(listIndex);
 
     uint32_t volId = blkInfoList.begin()->volID;
     uint32_t remainCnt = blkCnt - allocatedCnt;
+
+    std::chrono::time_point<std::chrono::system_clock> started = std::chrono::system_clock::now();
     while (remainCnt)
     {
         GcAllocateBlks gcAllocateBlks =
             gcStripeManager->AllocateWriteBufferBlks(volId, remainCnt);
         if (0 == gcAllocateBlks.numBlks)
         {
+            std::chrono::time_point<std::chrono::system_clock> finished = std::chrono::system_clock::now();
+            uint64_t elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(finished-started).count();
+            EasyTelemetryPublisherSingleton::Instance()->BufferIncrementCounter(TEL34003_COPIERREADCOMPLETION_DO_JOB_ELAPSED_MILLI, elapsed);
+            EasyTelemetryPublisherSingleton::Instance()->BufferIncrementCounter(TEL34003_COPIERREADCOMPLETION_FAILED_TO_ALLOCATE_BLKS);
             return false;
         }
         uint32_t startOffset = gcAllocateBlks.startOffset;
@@ -151,9 +165,12 @@ CopierReadCompletion::_DoSpecificJob(void)
             }
         }
     }
+    std::chrono::time_point<std::chrono::system_clock> finished = std::chrono::system_clock::now();
+    uint64_t elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(finished-started).count();
+    EasyTelemetryPublisherSingleton::Instance()->BufferIncrementCounter(TEL34003_COPIERREADCOMPLETION_DO_JOB_ELAPSED_MILLI, elapsed);
 
     volumeManager->DecreasePendingIOCount(volId, VolumeIoType::InternalIo, blkCnt);
-    airlog("InternalIoPendingCnt", "user", volId, -blkCnt);
+    airlog("InternalIoPendingCntNeg", "user", volId, blkCnt);
     meta->ReturnBuffer(stripeId, buffer);
     meta->SetDoneCopyBlks(blkCnt);
     airlog("PERF_CopierRead", "read", 0, BLOCK_SIZE * blkCnt);

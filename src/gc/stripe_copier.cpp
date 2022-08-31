@@ -41,6 +41,7 @@
 #include "src/include/meta_const.h"
 #include "src/io_submit_interface/i_io_submit_handler.h"
 #include "src/logger/logger.h"
+#include "src/telemetry/telemetry_client/easy_telemetry_publisher.h"
 
 namespace pos
 {
@@ -195,6 +196,7 @@ StripeCopier::CopyEvent::Execute(void)
         listIndex, buffer, meta, stripeId);
     callback->SetEventType(BackendEvent_GC);
 
+    EasyTelemetryPublisherSingleton::Instance()->BufferIncrementCounter(TEL34007_STRIPECOPIER_READ_CNT);
     iIOSubmitHandler->SubmitAsyncIO(IODirection::READ,
         bufferList, lsa, numPage,
         partitionType, callback, arrayIndex);

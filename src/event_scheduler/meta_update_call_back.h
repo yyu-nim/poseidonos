@@ -48,7 +48,7 @@ class MetaUpdateCallback : public Callback
 {
 public:
     MetaUpdateCallback(bool isFrontEnd, ISegmentCtx* segmentCtx_,
-        CallbackType type = CallbackType_Unknown, uint32_t weight = 1,
+        CallbackType type = CallbackType_MetaUpdate, uint32_t weight = 1,
         SystemTimeoutChecker* timeoutChecker = nullptr, EventScheduler* eventscheduler = nullptr);
     virtual ~MetaUpdateCallback(void);
 

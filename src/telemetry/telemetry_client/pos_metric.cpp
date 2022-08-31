@@ -118,6 +118,20 @@ POSMetric::GetCountValue(void)
     return value.count;
 }
 
+size_t
+POSMetric::Hash(void)
+{
+    string base = this->name;
+    size_t hashAccumulated = 0; // one trick is to hash individual label and add up since the operation is commutative.
+    // When it turns out that such accumulation leads to frequent hash collision, we'll find a better way.
+    for(auto label: this->labelList){
+        auto hashed = std::hash<string>{}(label.second);
+        hashAccumulated += hashed;
+    }
+    base += std::to_string(hashAccumulated);
+    return std::hash<string>{}(base);
+}
+
 int64_t
 POSMetric::GetGaugeValue(void)
 {

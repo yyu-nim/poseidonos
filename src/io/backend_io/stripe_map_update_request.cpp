@@ -47,6 +47,7 @@
 #include "src/logger/logger.h"
 #include "src/mapper_service/mapper_service.h"
 #include "src/meta_service/meta_service.h"
+#include "src/telemetry/telemetry_client/easy_telemetry_publisher.h"
 
 namespace pos
 {
@@ -139,13 +140,12 @@ StripeMapUpdateRequest::_DoSpecificJob(void)
     if (unlikely(EID(SUCCESS) != result))
     {
         // TODO (dh.ihm) Need to make fatal error (ret < 0) handle path.
-        POS_EVENT_ID eventId =
-            EID(NFLSH_EVENT_MAP_UPDATE_FAILED);
         std::stringstream message;
         message << "FlushCompletion for vsid: " << stripe->GetVsid() << ", wbLsid: " << stripe->GetWbLsid() << ", userAreaLsid: " << stripe->GetUserLsid();
-        POS_TRACE_ERROR(static_cast<int>(eventId),
-            "Failed to update map: {}", message.str());
+        POS_TRACE_ERROR_CONDITIONALLY(&changeLogger, result, result,
+            "Failed to update map");
 
+        EasyTelemetryPublisherSingleton::Instance()->BufferIncrementCounter(TEL36009_JRN_STRIPE_LOG_WRITE_FAILED);
         return false;
     }
 

@@ -73,7 +73,7 @@ Preferences::SetLogLevel(shared_ptr<spdlog::logger> logger, string value)
         logLevel = logger->level();
     }
 
-    pos::DumpSharedModuleInstanceEnable::debugLevelEnable = (logLevel == SPDLOG_LEVEL_DEBUG);
+    pos::DumpSharedModuleInstanceEnable::debugLevelEnable = true;
 
     if (value == LogLevelToString(logLevel))
     {

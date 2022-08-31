@@ -120,6 +120,7 @@ private:
         {"PERF_PORT", "write", true, "bw", TEL70011_WRITE_BPS_NETWORK, POSMetricTypes::MT_GAUGE, CustomLabel::PortNumber},
 
         {"CNT_PendingIO", "", true, "count", TEL80000_DEVICE_PENDING_IO_COUNT, POSMetricTypes::MT_GAUGE},
+        {"CNT_PendingIONeg", "", true, "count", TEL80001_DEVICE_PENDING_IO_COUNT_NEG, POSMetricTypes::MT_GAUGE},
 
         {"VolumeIo_Constructor", "", false, "count", TEL130001_COUNT_OF_VOLUME_IO_CONSTRUCTORS, POSMetricTypes::MT_GAUGE},
         {"VolumeIo_Destructor", "", false, "count", TEL130002_COUNT_OF_VOLUME_IO_DESTRUCTORS, POSMetricTypes::MT_GAUGE},
@@ -147,8 +148,17 @@ private:
         {"PartialWriteProcess", "", false, "count", TEL140007_COUNT_OF_PARTIAL_WRITE_PROCESS, POSMetricTypes::MT_GAUGE},
         {"UserFailIo", "", false, "count", TEL140008_COUNT_OF_USER_FAIL_IO, POSMetricTypes::MT_GAUGE},
         {"UserReadPendingCnt", "", false, "count", TEL140009_COUNT_OF_USER_READ_PENDING_CNT, POSMetricTypes::MT_GAUGE},
+        {"UserReadPendingCntNeg", "", false, "count", TEL140017_COUNT_OF_USER_READ_PENDING_CNT_NEG, POSMetricTypes::MT_GAUGE},
         {"UserWritePendingCnt", "", false, "count", TEL140010_COUNT_OF_USER_WRITE_PENDING_CNT, POSMetricTypes::MT_GAUGE},
+        {"UserWritePendingCntNeg", "", false, "count", TEL140018_COUNT_OF_USER_WRITE_PENDING_CNT_NEG, POSMetricTypes::MT_GAUGE},
         {"InternalIoPendingCnt", "", false, "count", TEL140011_COUNT_OF_INTERNAL_IO_PENDING_CNT, POSMetricTypes::MT_GAUGE},
+        {"InternalIoPendingCntNeg", "", false, "count", TEL140016_COUNT_OF_INTERNAL_IO_PENDING_CNT_NEG, POSMetricTypes::MT_GAUGE},
+
+        {"Q_EventQueue", "", true, "qd_avg", TEL140012_EVENTQ_AGV_QD, POSMetricTypes::MT_GAUGE},
+        {"Q_EventQueue", "", true, "qd_max", TEL140013_EVENTQ_MAX_QD, POSMetricTypes::MT_GAUGE},
+
+        {"Q_IOQueue", "", true, "qd_avg", TEL140014_IOQ_AGV_QD, POSMetricTypes::MT_GAUGE},
+        {"Q_IOQueue", "", true, "qd_max", TEL140015_IOQ_MAX_QD, POSMetricTypes::MT_GAUGE},
         {"TimeOutIoCnt", "", false, "count", TEL140012_COUNT_OF_TIMEOUT_IO_CNT, POSMetricTypes::MT_GAUGE},
     };
 };

@@ -39,6 +39,7 @@
 #include "metafs_config.h"
 #include "metafs_control_request.h"
 #include "mpio.h"
+#include "src/telemetry/telemetry_client/easy_telemetry_publisher.h"
 
 namespace pos
 {
@@ -403,6 +404,12 @@ Mio::Complete(MioState expNextState)
 {
     StoreTimestamp(MioTimestampStage::Complete);
     SetNextState(expNextState);
+
+    vector<pair<string, string>> labels = {
+        {"file_type", std::to_string( (int) (this->GetFileType())) },
+        {"array_id", std::to_string( this->GetArrayId() )}
+    };
+    EasyTelemetryPublisherSingleton::Instance()->BufferIncrementCounter(TEL40306_METAFS_MIOHANDLER_ENQUEUE_IOCQ_TYPE, 1, labels);
 
     StoreTimestamp(MioTimestampStage::PushToCQ);
     ioCQ->Enqueue(this);

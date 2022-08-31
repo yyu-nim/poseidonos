@@ -152,7 +152,7 @@ timebase=1
 runtime=$test_time
 sudo ${iopathdir}/fio_bench.py --traddr=${target_ip} --trtype=tcp --readwrite=${iotype} \
 --io_size=${sizepervol} --verify=false --bs=${blocksize} --time_based=${timebase} \
---run_time=${runtime} --iodepth=4 --file_num=${volume_cnt}
+--run_time=28800 --iodepth=4 --file_num=${volume_cnt}
 
 res=$?
 check_result

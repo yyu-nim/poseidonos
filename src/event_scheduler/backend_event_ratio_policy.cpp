@@ -44,6 +44,7 @@
 #include "src/include/pos_event_id.hpp"
 #include "src/logger/logger.h"
 #include "src/qos/qos_manager.h"
+#include "src/telemetry/telemetry_client/easy_telemetry_publisher.h"
 
 namespace pos
 {
@@ -81,6 +82,11 @@ BackendEventRatioPolicy::~BackendEventRatioPolicy()
 void
 BackendEventRatioPolicy::EnqueueEvent(EventSmartPtr input)
 {
+    vector<pair<string, string>> labels = {
+        {"backend_event", std::to_string((int) (input->GetEventType())) }
+    };
+    EasyTelemetryPublisherSingleton::Instance()->ShardedBufferIncrementCounter(METRIC_BE_RATIO_POLICY_SHARD_ID, TEL130017_BE_RATIO_POLICY_ENQ_CNT, 1, labels);
+
     if (input->GetEventType() == BackendEvent_FrontendIO)
     {
         uint32_t queueId = rand() % FE_QUEUES;
@@ -168,7 +174,23 @@ BackendEventRatioPolicy::DequeueEvents(void)
             }
             currentEventCount[eventType] += actualCount;
         }
+
+        auto callbackPtr = std::dynamic_pointer_cast<Callback>(event);
+        string callbackType;
+        if (callbackPtr != nullptr) {
+            callbackType = std::to_string( (int) (callbackPtr->GetCallbackType()) );
+        } else {
+            callbackType = "NotCallback";
+        }
+        vector<pair<string, string>> labels = {
+            {"backend_event", std::to_string((int) eventType) },
+            {"callback_type", callbackType}
+        };
+        EasyTelemetryPublisherSingleton::Instance()->ShardedBufferUpdateGauge(METRIC_BE_RATIO_POLICY_SHARD_ID, TEL130017_BE_RATIO_POLICY_CURR_EVENT_CNT_GAUGE, currentEventCount[eventType].load(), labels);
     }
+    if( eventList.size() > 0 )
+        EasyTelemetryPublisherSingleton::Instance()->ShardedBufferIncrementCounter(METRIC_BE_RATIO_POLICY_SHARD_ID, TEL130018_BE_RATIO_POLICY_DEQ_CNT, eventList.size());
+
     return eventList;
 }
 
@@ -186,6 +208,21 @@ BackendEventRatioPolicy::DequeueWorkerEvent(void)
     EventSmartPtr event = workerCommonQueue.front();
     workerCommonQueue.pop();
     airlog("WorkerCommonQueue_Pop", "internal", event->GetEventType(), 1);
+
+    auto callbackPtr = std::dynamic_pointer_cast<Callback>(event);
+    string callbackType;
+    if (callbackPtr != nullptr) {
+        callbackType = std::to_string( (int) (callbackPtr->GetCallbackType()) );
+    } else {
+        callbackType = "NotCallback";
+    }
+
+    vector<pair<string, string>> labels = {
+        {"backend_event", std::to_string((int) event->GetEventType()) },
+        {"callback_type", callbackType}
+    };
+    EasyTelemetryPublisherSingleton::Instance()->ShardedBufferIncrementCounter(METRIC_BE_RATIO_POLICY_SHARD_ID, TEL130019_BE_RATIO_POLICY_WORKER_COMMON_QUEUE_POP, 1, labels);
+
     return event;
 }
 
@@ -216,6 +253,12 @@ BackendEventRatioPolicy::CheckAndSetQueueOccupancy(BackendEvent eventId)
     {
         _CheckAndSetAllowedLimit();
     }
+
+    vector<pair<string, string>> labels = {
+        { "backend_event", std::to_string( (int) eventId) }
+    };
+    int gaugeValue = queueOccupied[eventId] ? 1 : 0;
+    EasyTelemetryPublisherSingleton::Instance()->ShardedBufferUpdateGauge(METRIC_BE_RATIO_POLICY_SHARD_ID, TEL130019_BE_RATIO_POLICY_QUEUE_OCCUPIED, gaugeValue, labels);
 }
 
 void
@@ -225,6 +268,12 @@ BackendEventRatioPolicy::_InitLimitValues(void)
     {
         allowedEventCount[eventType] = totalEventCount / BackendEvent_Count;
         ioControl.allowedIOCount[eventType] = totalIOCount / BackendEvent_Count;
+
+        vector<pair<string, string>> labels = {
+            { "backend_event", std::to_string( eventType ) }
+        };
+        EasyTelemetryPublisherSingleton::Instance()->ShardedBufferIncrementCounter(METRIC_BE_RATIO_POLICY_SHARD_ID, TEL130019_BE_RATIO_POLICY_INIT_LIMITS_ALLOWED_EVENTS, allowedEventCount[eventType], labels);
+        EasyTelemetryPublisherSingleton::Instance()->ShardedBufferIncrementCounter(METRIC_BE_RATIO_POLICY_SHARD_ID, TEL130019_BE_RATIO_POLICY_INIT_LIMITS_ALLOWED_IOS, ioControl.allowedIOCount[eventType], labels);
     }
 }
 
@@ -267,6 +316,12 @@ BackendEventRatioPolicy::_CheckAndSetAllowedLimit(void)
             {
                 ioControl.allowedIOCount[eventType] = 1;
             }
+
+            vector<pair<string, string>> labels = {
+                { "backend_event", std::to_string( eventType ) }
+            };
+            EasyTelemetryPublisherSingleton::Instance()->ShardedBufferIncrementCounter(METRIC_BE_RATIO_POLICY_SHARD_ID, TEL130019_BE_RATIO_POLICY_SET_ALLOWED_EVENTS, allowedEventCount[eventType], labels);
+            EasyTelemetryPublisherSingleton::Instance()->ShardedBufferIncrementCounter(METRIC_BE_RATIO_POLICY_SHARD_ID, TEL130019_BE_RATIO_POLICY_SET_ALLOWED_IOS, ioControl.allowedIOCount[eventType], labels);
         }
     }
 }
@@ -283,6 +338,7 @@ BackendEventRatioPolicy::Run(void)
     std::queue<EventSmartPtr> eventList = DequeueEvents();
     if (unlikely(eventList.empty()))
     {
+        EasyTelemetryPublisherSingleton::Instance()->ShardedBufferIncrementCounter(METRIC_BE_RATIO_POLICY_SHARD_ID, TEL130019_BE_RATIO_POLICY_QOS_FAILURE);
         return QosReturnCode::FAILURE;
     }
     EventSmartPtr event = nullptr;
@@ -293,7 +349,24 @@ BackendEventRatioPolicy::Run(void)
         eventList.pop();
         currentEventCount[event->GetEventType()]--;
         airlog("WorkerCommonQueue_Push", "internal", event->GetEventType(), 1);
+
+        // Once the airlog for WorkerCommonQueue_Push is enabled, the following (and its related gauge)
+        // can be disabled (or commented out)
+        auto callbackPtr = std::dynamic_pointer_cast<Callback>(event);
+        string callbackType;
+        if (callbackPtr != nullptr) {
+            callbackType = std::to_string( (int) (callbackPtr->GetCallbackType()) );
+        } else {
+            callbackType = "NotCallback";
+        }
+
+        vector<pair<string, string>> labels = {
+            {"backend_event", std::to_string((int) event->GetEventType()) },
+            {"callback_type", callbackType}
+        };
+        EasyTelemetryPublisherSingleton::Instance()->ShardedBufferUpdateGauge(METRIC_BE_RATIO_POLICY_SHARD_ID, TEL130017_BE_RATIO_POLICY_CURR_EVENT_CNT_GAUGE, currentEventCount[event->GetEventType()].load(), labels);
         workerCommonQueue.push(event);
+        EasyTelemetryPublisherSingleton::Instance()->ShardedBufferIncrementCounter(METRIC_BE_RATIO_POLICY_SHARD_ID, TEL130019_BE_RATIO_POLICY_WORKER_COMMON_QUEUE_PUSH, 1, labels);
     }
     workerQueueLock.unlock();
     return QosReturnCode::SUCCESS;

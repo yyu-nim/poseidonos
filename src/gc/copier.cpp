@@ -49,9 +49,16 @@
 #include "src/include/backend_event.h"
 #include "src/io/general_io/io_submit_handler.h"
 #include "src/logger/logger.h"
+#include "src/event_scheduler/event_scheduler.h"
+#include "src/allocator/context_manager/segment_ctx/segment_ctx.h"
+#include "src/allocator/context_manager/gc_ctx/gc_ctx.h"
+#include "src/telemetry/telemetry_id.h"
+#include "src/telemetry/telemetry_client/telemetry_client.h"
+#include "src/telemetry/telemetry_client/easy_telemetry_publisher.h"
 
 namespace pos
 {
+
 Copier::Copier(SegmentId victimId, SegmentId targetId, GcStatus* gcStatus, IArrayInfo* array)
 : Copier(victimId, targetId, gcStatus, array,
       array->GetSizeInfo(PartitionType::USER_DATA), new CopierMeta(array),
@@ -87,6 +94,7 @@ Copier::Copier(SegmentId victimId, SegmentId targetId, GcStatus* gcStatus, IArra
     victimIndex = 0;
 
     SetEventType(BackendEvent_GC);
+    EasyTelemetryPublisherSingleton ::Instance()->BufferIncrementCounter(TEL34000_GC_COPIER_CREATED);
 }
 
 Copier::~Copier(void)
@@ -95,6 +103,8 @@ Copier::~Copier(void)
     {
         delete meta;
     }
+
+    EasyTelemetryPublisherSingleton::Instance()->BufferIncrementCounter(TEL34000_GC_COPIER_DESTROYED);
 }
 
 bool
@@ -103,34 +113,42 @@ Copier::Execute(void)
     if (true == isStopped)
     {
         bool ret = _Stop();
+        EasyTelemetryPublisherSingleton::Instance()->BufferIncrementCounter(TEL34000_GC_COPIER_STOP_RETURN);
         return ret;
     }
     else if (true == isPaused)
     {
+        EasyTelemetryPublisherSingleton::Instance()->BufferIncrementCounter(TEL34000_GC_COPIER_PAUSE_RETURN);
         return false;
     }
     else
     {
+        EasyTelemetryPublisherSingleton::Instance()->BufferIncrementCounter(TEL34000_GC_COPIER_EXECUTE);
         switch (copybackState)
         {
             case CopierStateType::COPIER_THRESHOLD_CHECK_STATE:
+                EasyTelemetryPublisherSingleton::Instance()->BufferIncrementCounter(TEL34000_GC_COPIER_EXECUTE_B1);
                 _CompareThresholdState();
                 break;
 
             case CopierStateType::COPIER_COPY_PREPARE_STATE:
+                EasyTelemetryPublisherSingleton::Instance()->BufferIncrementCounter(TEL34000_GC_COPIER_EXECUTE_B2);
                 _CopyPrepareState();
                 break;
 
             case CopierStateType::COPIER_COPY_COMPLETE_STATE:
             {
+                EasyTelemetryPublisherSingleton::Instance()->BufferIncrementCounter(TEL34000_GC_COPIER_EXECUTE_B3);
                 bool ret = _CopyCompleteState();
                 return ret;
             }
 
             case CopierStateType::COPIER_READY_TO_END_STATE:
+                EasyTelemetryPublisherSingleton::Instance()->BufferIncrementCounter(TEL34000_GC_COPIER_EXECUTE_B4);
                 return readyToEnd;
 
             default:
+                EasyTelemetryPublisherSingleton::Instance()->BufferIncrementCounter(TEL34000_GC_COPIER_EXECUTE_DEFAULT);
                 break;
         }
     }
@@ -145,6 +163,7 @@ Copier::_Stop(void)
     {
         if (false == _IsAllVictimSegmentCopyDone())
         {
+            EasyTelemetryPublisherSingleton::Instance()->BufferIncrementCounter(TEL34000_GC_COPIER_VICTIMCOPY_NOTDONE);
             return false;
         }
     }
@@ -152,6 +171,7 @@ Copier::_Stop(void)
     GcStripeManager* gcStripeManager = meta->GetGcStripeManager();
     if (false == gcStripeManager->IsAllFinished())
     {
+        EasyTelemetryPublisherSingleton::Instance()->BufferIncrementCounter(TEL34000_GC_COPIER_STRIPEMGR_FLUSH_NOTDONE);
         return false;
     }
 
@@ -178,6 +198,7 @@ Copier::_CompareThresholdState(void)
     GcCtx* gcCtx = iContextManager->GetGcCtx();
 
     GcMode gcMode = gcCtx->GetCurrentGcMode();
+    EasyTelemetryPublisherSingleton::Instance()->BufferUpdateGauge(TEL34000_GC_COPIER_GCMODE, gcMode);
 
     _CleanUpVictimSegments();
 
@@ -189,6 +210,8 @@ Copier::_CompareThresholdState(void)
 
         if (UNMAP_SEGMENT != victimId)
         {
+            EasyTelemetryPublisherSingleton::Instance()->BufferIncrementCounter(TEL34000_GC_COPIER_COMPARE_PREPARE);
+
             _InitVariables();
             _ChangeEventState(CopierStateType::COPIER_COPY_PREPARE_STATE);
 
@@ -196,6 +219,8 @@ Copier::_CompareThresholdState(void)
             POS_TRACE_DEBUG(EID(GC_GET_VICTIM_SEGMENT),
                 "trigger start, cnt:{}, victimId:{}",
                 numFreeSegments, victimId);
+        } else {
+            EasyTelemetryPublisherSingleton::Instance()->BufferIncrementCounter(TEL34000_GC_COPIER_VICTIM_SEG_UNMAPPED);
         }
     }
 }
@@ -249,10 +274,12 @@ Copier::_CopyCompleteState(void)
     bool ret = _IsSynchronized();
     if (false == ret)
     {
+        EasyTelemetryPublisherSingleton::Instance()->BufferIncrementCounter(TEL34000_GC_COPIER_COPY_INCOMPLETE_META_NOTSYNC);
+
         return false;
     }
 
-    POS_TRACE_DEBUG(EID(GC_COPY_COMPLETE),
+    POS_TRACE_INFO(EID(GC_COPY_COMPLETE),
         "copy complete, id:{}", victimId);
 
     uint32_t invalidBlkCnt = userDataMaxBlks - meta->GetDoneCopyBlks();
@@ -261,6 +288,7 @@ Copier::_CopyCompleteState(void)
         invalidBlkCnt /*invalid cnt*/, meta->GetDoneCopyBlks() /*copy cnt*/);
 
     _ChangeEventState(CopierStateType::COPIER_THRESHOLD_CHECK_STATE);
+    // TODO: state machine의 이력을 알면 도움이 될 수도 있겠다.
 
     if (false == thresholdCheck)
     {
@@ -282,6 +310,7 @@ Copier::_IsSynchronized(void)
         }
         else
         {
+            EasyTelemetryPublisherSingleton::Instance()->BufferIncrementCounter(TEL34000_GC_COPIER_NOTSYNC_BUT_COPYDONE_CNT);
             ret = true;
         }
     }
@@ -314,6 +343,14 @@ Copier::_CleanUpVictimSegments(void)
             segmentCtx->MoveToFreeState(victimSegId);
         }
     }
+}
+
+void
+Copier::_ChangeEventState(CopierStateType state)
+{
+    copybackState = state;
+
+    EasyTelemetryPublisherSingleton::Instance()->BufferUpdateGauge(TEL34000_GC_COPIER_EVENT_STATE, state);
 }
 
 } // namespace pos

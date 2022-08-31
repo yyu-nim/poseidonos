@@ -54,6 +54,7 @@
 #include "src/mapper/mapper.h"
 #include "src/mapper_service/mapper_service.h"
 #include "src/meta_service/meta_service.h"
+#include "src/telemetry/telemetry_client/easy_telemetry_publisher.h"
 
 namespace pos
 {
@@ -71,7 +72,7 @@ GcMapUpdateRequest::GcMapUpdateRequest(StripeSmartPtr stripe,
     IVSAMap* inputIVSAMap,
     IArrayInfo* inputIArrayInfo,
     IMetaUpdater* inputMetaUpdater)
-: Event(false),
+: Callback(false, CallbackType_GcMapUpdateRequest),
   stripe(stripe),
   completionEvent(completionEvent),
   iVSAMap(inputIVSAMap),
@@ -87,7 +88,7 @@ GcMapUpdateRequest::GcMapUpdateRequest(StripeSmartPtr stripe,
 }
 
 bool
-GcMapUpdateRequest::Execute(void)
+GcMapUpdateRequest::_DoSpecificJob(void)
 {
     bool result = true;
     result = _BuildMeta();
@@ -150,10 +151,10 @@ GcMapUpdateRequest::_UpdateMeta(void)
     int result = metaUpdater->UpdateGcMap(stripe, mapUpdates, invalidSegCnt, completionEvent);
     if (unlikely(0 != result))
     {
-        POS_EVENT_ID eventId = EID(GC_MAP_UPDATE_FAILED);
-        POS_TRACE_ERROR(static_cast<int>(eventId),
-            "gc map update failed, arrayName:{}, stripeUserLsid:{}",
-            iArrayInfo->GetName(), mapUpdates.userLsid);
+        POS_TRACE_ERROR_CONDITIONALLY(&changeLogger, result, result,
+            "gc map update failed");
+
+        EasyTelemetryPublisherSingleton::Instance()->BufferIncrementCounter(TEL36010_JRN_GC_LOG_WRITE_FAILED);
         return false;
     }
 

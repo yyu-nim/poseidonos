@@ -63,6 +63,9 @@ public:
     virtual int PublishData(std::string id_, POSMetricValue value_, POSMetricTypes type_);
     virtual int PublishMetric(POSMetric metric);
     virtual int PublishMetricList(std::vector<POSMetric>* metricList);
+    virtual void IncrementCounter(std::string id_);
+    virtual void IncrementCounter(std::string id_, uint64_t counts);
+    virtual void UpdateGauge(std::string id_, uint64_t v);
     virtual POSMetricVector* AllocatePOSMetricVector(void);
     virtual void SetGlobalPublisher(IGlobalPublisher* gp);
     virtual int AddDefaultLabel(std::string key, std::string value);

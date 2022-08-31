@@ -44,6 +44,7 @@
 #include "src/metafs/mim/scalable_meta_io_worker.h"
 #include "src/metafs/mvm/meta_volume_manager.h"
 #include "src/telemetry/telemetry_client/telemetry_publisher.h"
+#include "src/telemetry/telemetry_client/easy_telemetry_publisher.h"
 
 namespace pos
 {
@@ -231,6 +232,7 @@ MetaFsIoScheduler::IssueRequestAndDelete(MetaFsIoRequest* reqMsg)
 
     issueCount_[(int)currentReqMsg_->targetMediaType] += requestCount_;
 
+
     while (remainCount_)
     {
         // reqMsg     : only for meta scheduler, not meta handler thread
@@ -321,6 +323,13 @@ MetaFsIoScheduler::_IssueRequestToMioWorker(MetaFsIoRequest* reqMsg)
 void
 MetaFsIoScheduler::EnqueueNewReq(MetaFsIoRequest* reqMsg)
 {
+    vector<pair<string, string>> labels = {
+        { "file_type", std::to_string((int) (reqMsg->GetFileType())) },
+        { "fd", std::to_string(reqMsg->fd) },
+        { "array_id", std::to_string(reqMsg->arrayId) }
+    };
+    EasyTelemetryPublisherSingleton::Instance()->BufferIncrementCounter(TEL40306_METAFS_SCHEDULER_ENQUEUE_IOSQ_TYPE, 1, labels);
+
     ioSQ_.Enqueue(reqMsg, reqMsg->GetFileType());
 }
 
@@ -485,6 +494,17 @@ MetaFsIoScheduler::Execute(void)
 MetaFsIoRequest*
 MetaFsIoScheduler::_FetchPendingNewReq(void)
 {
-    return ioSQ_.Dequeue();
+    MetaFsIoRequest* req = ioSQ_.Dequeue();
+
+    if( req != nullptr ) {
+        vector<pair<string, string>> labels = {
+            { "file_type", std::to_string((int) (req->GetFileType())) },
+            { "fd", std::to_string(req->fd) },
+            { "array_id", std::to_string(req->arrayId) }
+        };
+        EasyTelemetryPublisherSingleton::Instance()->BufferIncrementCounter(TEL40306_METAFS_SCHEDULER_DEQUEUE_IOSQ_TYPE, 1, labels);
+    }
+
+    return req;
 }
 } // namespace pos

@@ -42,6 +42,7 @@
 #include "src/logger/logger.h"
 #include "src/telemetry/telemetry_client/telemetry_publisher.h"
 #include "src/metadata/block_map_update.h"
+#include "src/telemetry/telemetry_client/easy_telemetry_publisher.h"
 
 namespace pos
 {
@@ -57,11 +58,13 @@ LogWriteHandler::LogWriteHandler(LogWriteStatistics* statistics, WaitingLogList*
   bufferAllocator(nullptr),
   logWriteStats(statistics),
   waitingList(waitingList),
+  numIosRequested(nullptr),
+  numIosCompleted(nullptr),
   telemetryPublisher(nullptr),
-  interval(nullptr)
+  interval(nullptr),
+  sumOfTimeSpentPerInterval(0),
+  doneCountPerInterval(0)
 {
-    numIosRequested = 0;
-    numIosCompleted = 0;
 }
 
 LogWriteHandler::~LogWriteHandler(void)
@@ -88,6 +91,9 @@ LogWriteHandler::Init(BufferOffsetAllocator* allocator, IJournalLogBuffer* buffe
     {
         logWriteStats->Init(journalConfig->GetNumLogGroups());
     }
+
+    numIosRequested = new std::vector<std::atomic<uint64_t>>(journalConfig->GetNumLogGroups());
+    numIosCompleted = new std::vector<std::atomic<uint64_t>>(journalConfig->GetNumLogGroups());
 }
 
 void
@@ -102,6 +108,7 @@ LogWriteHandler::AddLog(LogWriteContext* context)
     uint64_t allocatedOffset = 0;
 
     int result = bufferAllocator->AllocateBuffer(context->GetLength(), allocatedOffset);
+    uint64_t contextLength = context->GetLength();
 
     if (EID(SUCCESS) == result)
     {
@@ -127,18 +134,29 @@ LogWriteHandler::AddLog(LogWriteContext* context)
 
         context->stopwatch.StoreTimestamp(LogStage::Issue);
         result = logBuffer->WriteLog(context);
+
+        vector<pair<string, string>> labels = {
+            { "group_id", std::to_string(groupId) }
+        };
         if (EID(SUCCESS) == result)
         {
-            numIosRequested++;
+            EasyTelemetryPublisherSingleton::Instance()->BufferIncrementCounter(TEL36005_JRN_LOG_WRITE_LOG_SUCCESS, 1, labels);
+            (*numIosRequested)[groupId] += contextLength;
         }
         else
         {
+            EasyTelemetryPublisherSingleton::Instance()->BufferIncrementCounter(TEL36005_JRN_LOG_FAILED_TO_WRITE, 1, labels);
             delete context;
 
             // This is to cancel the buffer allocation
             POS_TRACE_ERROR(result, "Log write failed due to io error and canceled buffer allocation");
             bufferAllocator->LogWriteCanceled(groupId);
         }
+    }
+    else
+    {
+        EasyTelemetryPublisherSingleton::Instance()->BufferIncrementCounter(TEL36005_JRN_LOG_FAILED_TO_ALLOC_BUF);
+        delete context;
     }
 
     return result;
@@ -153,12 +171,18 @@ LogWriteHandler::AddLogToWaitingList(LogWriteContext* context)
 void
 LogWriteHandler::LogWriteDone(AsyncMetaFileIoCtx* ctx)
 {
-    numIosCompleted++;
-
     LogWriteContext* context = dynamic_cast<LogWriteContext*>(ctx);
 
     if (context != nullptr)
     {
+        int groupId = context->GetLogGroupId();
+        vector<pair<string, string>> labels = {
+            { "group_id", std::to_string(groupId) }
+        };
+        EasyTelemetryPublisherSingleton::Instance()->BufferIncrementCounter(TEL36006_JRN_LOG_DONE_COUNT_EASY, 1, labels);
+
+        (*numIosCompleted)[groupId] += context->GetLength();
+
         context->stopwatch.StoreTimestamp(LogStage::Complete);
         _PublishPeriodicMetrics(context);
 
@@ -169,7 +193,7 @@ LogWriteHandler::LogWriteDone(AsyncMetaFileIoCtx* ctx)
             // When log write fails due to error, should log the error and complete write
             POS_TRACE_ERROR(EID(JOURNAL_LOG_WRITE_FAILED),
                 "Log write failed due to io error");
-
+            EasyTelemetryPublisherSingleton::Instance()->BufferIncrementCounter(TEL36006_JRN_LOG_DONE_WITH_ERR_COUNT_EASY, 1, labels);
             statusUpdatedToStats = false;
         }
         else
@@ -188,6 +212,8 @@ LogWriteHandler::LogWriteDone(AsyncMetaFileIoCtx* ctx)
         {
             delete context;
         }
+    } else {
+        EasyTelemetryPublisherSingleton::Instance()->BufferIncrementCounter(TEL36006_JRN_LOG_DONE_NULLCTX_COUNT_EASY);
     }
     _StartWaitingIos();
 }
@@ -204,18 +230,22 @@ LogWriteHandler::_PublishPeriodicMetrics(LogWriteContext* context)
         sumOfTimeSpentPerInterval = 0;
         doneCountPerInterval = 0;
 
-        std::string logGroupId = std::to_string(context->GetLogGroupId());
         POSMetricVector* v = new POSMetricVector();
 
-        POSMetric metricIssueCnt(TEL36005_JRN_LOG_COUNT, POSMetricTypes::MT_GAUGE);
-        metricIssueCnt.AddLabel("group_id", logGroupId);
-        metricIssueCnt.SetGaugeValue(numIosRequested);
-        v->emplace_back(metricIssueCnt);
+        for (size_t i = 0; i < numIosRequested->size(); ++i)
+        {
+            std::string logGroupId = std::to_string(i);
 
-        POSMetric metricDoneCnt(TEL36006_JRN_LOG_DONE_COUNT, POSMetricTypes::MT_GAUGE);
-        metricDoneCnt.AddLabel("group_id", logGroupId);
-        metricDoneCnt.SetGaugeValue(numIosCompleted);
-        v->emplace_back(metricDoneCnt);
+            POSMetric metricIssueCnt(TEL36005_JRN_LOG_COUNT, POSMetricTypes::MT_GAUGE);
+            metricIssueCnt.AddLabel("group_id", logGroupId);
+            metricIssueCnt.SetGaugeValue((*numIosRequested)[i]);
+            v->emplace_back(metricIssueCnt);
+
+            POSMetric metricDoneCnt(TEL36006_JRN_LOG_DONE_COUNT, POSMetricTypes::MT_GAUGE);
+            metricDoneCnt.AddLabel("group_id", logGroupId);
+            metricDoneCnt.SetGaugeValue((*numIosCompleted)[i]);
+            v->emplace_back(metricDoneCnt);
+        }
 
         if (count)
         {

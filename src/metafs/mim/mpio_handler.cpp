@@ -36,6 +36,7 @@
 
 #include "src/metafs/config/metafs_config_manager.h"
 #include "src/telemetry/telemetry_client/telemetry_client.h"
+#include "src/telemetry/telemetry_client/easy_telemetry_publisher.h"
 
 namespace pos
 {
@@ -76,6 +77,13 @@ MpioHandler::~MpioHandler(void)
 void
 MpioHandler::EnqueuePartialMpio(Mpio* mpio)
 {
+    vector<pair<string, string>> labels = {
+        {"file_type", std::to_string((int) (mpio->GetFileType()))},
+        {"core_id", std::to_string(this->coreId)}
+    };
+    string shardId = "mpio_core_id" + std::to_string(this->coreId);
+    EasyTelemetryPublisherSingleton::Instance()->ShardedBufferIncrementCounter(shardId, TEL40306_METAFS_MPIOHANDLER_ENQUEUE_PARITIALQ_CORE, 1, labels);
+
     mpio->StoreTimestamp(MpioTimestampStage::PushToDoneQ);
     partialMpioDoneQ->Enqueue(mpio, mpio->GetFileType());
 }
@@ -94,6 +102,13 @@ MpioHandler::BottomhalfMioProcessing(void)
     if (mpio)
     {
         mpio->StoreTimestamp(MpioTimestampStage::PopFromDoneQ);
+
+        vector<pair<string, string>> labels = {
+            {"file_type", std::to_string((int) (mpio->GetFileType()))},
+            {"core_id", std::to_string(this->coreId)}
+        };
+        string shardId = "mpio_core_id" + std::to_string(this->coreId);
+        EasyTelemetryPublisherSingleton::Instance()->ShardedBufferIncrementCounter(shardId, TEL40306_METAFS_MPIOHANDLER_DEQUEUE_PARITIALQ_CORE, 1, labels);
 
         mpio->ExecuteAsyncState();
 

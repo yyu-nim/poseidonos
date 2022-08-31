@@ -61,6 +61,9 @@ public:
     virtual void SetCallee(CallbackSmartPtr callee);
     void InformError(IOErrorType inputIOErrorType);
     static void SetTimeout(uint64_t timeout);
+    inline CallbackType GetCallbackType() {
+        return type;
+    }
 
 protected:
     virtual uint32_t _GetErrorCount(void);
@@ -93,7 +96,7 @@ private:
     static const uint64_t MAX_TIMEOUT_SEC;
     EventScheduler *eventScheduler;
     IoTimeoutChecker *ioTimeoutChecker;
-    
+
     uint64_t createdTime;
 };
 } // namespace pos

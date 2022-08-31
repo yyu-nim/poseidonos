@@ -70,7 +70,7 @@ GcMapUpdateCompletion::GcMapUpdateCompletion(StripeSmartPtr stripe, std::string 
     IArrayInfo* inputIArrayInfo,
     RBAStateManager* inputRbaStateManager,
     IVolumeIoManager* inputVolumeManager)
-: Callback(false),
+: Callback(false, CallbackType_GcMapUpdateCompletion),
   stripe(stripe),
   arrayName(arrayName),
   iStripeMap(iStripeMap),
@@ -111,7 +111,7 @@ GcMapUpdateCompletion::_DoSpecificJob(void)
     rbaStateManager->ReleaseOwnershipRbaList(volId, rbaList);
 
     volumeManager->DecreasePendingIOCount(volId, VolumeIoType::InternalIo);
-    airlog("InternalIoPendingCnt", "user", volId, -1);
+    airlog("InternalIoPendingCntNeg", "user", volId, 1);
 
     gcStripeManager->SetFinished();
 

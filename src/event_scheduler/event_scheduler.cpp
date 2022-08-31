@@ -49,6 +49,7 @@
 #include "src/master_context/config_manager.h"
 #include "src/qos/qos_manager.h"
 #include "src/spdk_wrapper/accel_engine_api.h"
+#include "src/telemetry/telemetry_client/easy_telemetry_publisher.h"
 
 namespace pos
 {
@@ -181,12 +182,26 @@ EventScheduler::EjectIODispatcher(void)
 void
 EventScheduler::EnqueueEvent(EventSmartPtr input)
 {
+    auto callbackPtr = std::dynamic_pointer_cast<Callback>(input);
+    string callbackType;
+    if (callbackPtr != nullptr) {
+        callbackType = std::to_string( (int) (callbackPtr->GetCallbackType()) );
+    } else {
+        callbackType = "NotCallback";
+    }
+    vector<pair<string, string>> labels = {
+        {"backend_event", std::to_string((int) input->GetEventType()) },
+        {"callback_type", callbackType}
+    };
+
     if (!affinityManager->UseEventReactor())
     {
+        EasyTelemetryPublisherSingleton::Instance()->BufferIncrementCounter(TEL130020_EVENT_SCHEDULER_POLICY_ENQ, 1, labels);
         policy->EnqueueEvent(input);
     }
     else
     {
+        EasyTelemetryPublisherSingleton::Instance()->BufferIncrementCounter(TEL130020_EVENT_SCHEDULER_EVENT_REACTOR_ENQ, 1, labels);
         static std::atomic<uint32_t> lastReactorIndex;
         uint32_t type = static_cast<uint32_t>(input->GetEventType());
         if (type == BackendEvent_UserdataRebuild || type == BackendEvent_MetadataRebuild ||

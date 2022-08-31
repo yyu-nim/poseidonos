@@ -46,6 +46,7 @@
 #include "src/metafs/include/metafs_service.h"
 #include "src/metafs/storage/mss.h"
 #include "src/telemetry/telemetry_client/telemetry_client.h"
+#include "src/telemetry/telemetry_client/easy_telemetry_publisher.h"
 
 namespace pos
 {
@@ -189,6 +190,15 @@ MioHandler::_HandleIoSQ(void)
     }
     reqMsg->StoreTimestamp(IoRequestStage::Dequeue);
 
+    vector<pair<string, string>> labels = {
+        { "file_type",  std::to_string((int) (reqMsg->GetFileType())) },
+        { "core_id", std::to_string( this->coreId ) },
+        { "fd", std::to_string(reqMsg->fd) },
+        { "array_id", std::to_string(reqMsg->arrayId) }
+    };
+    string shardId = "mio_core_id" + std::to_string(this->coreId);
+    EasyTelemetryPublisherSingleton::Instance()->ShardedBufferIncrementCounter(shardId, TEL40306_METAFS_MIOHANDLER_DEQUEUE_IOSQ_TYPE, 1, labels);
+
     if (_IsRangeOverlapConflicted(reqMsg) || _IsPendedRange(reqMsg))
     {
         reqMsg->StoreTimestamp(IoRequestStage::EnqueueToRetryQ);
@@ -305,6 +315,15 @@ MioHandler::_HandleIoCQ(void)
     if (mio)
     {
         mio->StoreTimestamp(MioTimestampStage::PopFromCQ);
+
+        vector<pair<string, string>> labels = {
+            { "file_type",  std::to_string((int) (mio->GetFileType())) },
+            { "core_id", std::to_string( this->coreId ) },
+            { "target_storage", std::to_string((int) (mio->GetTargetStorage())) },
+            { "array_id", std::to_string(mio->GetArrayId()) }
+        };
+        string shardId = "mio_core_id" + std::to_string(this->coreId);
+        EasyTelemetryPublisherSingleton::Instance()->ShardedBufferIncrementCounter(shardId, TEL40306_METAFS_MIOHANDLER_DEQUEUE_IOCQ_TYPE, 1, labels);
 
         while (mio->IsCompleted() != true)
         {
@@ -426,6 +445,15 @@ MioHandler::TophalfMioProcessing(void)
 void
 MioHandler::EnqueueNewReq(MetaFsIoRequest* reqMsg)
 {
+    vector<pair<string, string>> labels = {
+        {"file_type", std::to_string((int) (reqMsg->GetFileType()))},
+        {"core_id", std::to_string(this->coreId)},
+        {"fd", std::to_string( reqMsg->fd )},
+        {"array_id", std::to_string( reqMsg->arrayId )}
+    };
+    string shardId = "mio_core_id" + std::to_string(this->coreId);
+    EasyTelemetryPublisherSingleton::Instance()->ShardedBufferIncrementCounter(shardId, TEL40306_METAFS_MIOHANDLER_ENQUEUE_IOSQ_TYPE, 1, labels);
+
     reqMsg->StoreTimestamp(IoRequestStage::Enqueue);
     ioSQ->Enqueue(reqMsg, reqMsg->GetFileType());
 }

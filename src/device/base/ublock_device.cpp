@@ -43,6 +43,8 @@
 #include "src/io_scheduler/io_dispatcher.h"
 #include "src/logger/logger.h"
 #include "src/spdk_wrapper/event_framework_api.h"
+#include "src/telemetry/telemetry_client/easy_telemetry_publisher.h"
+#include "src/telemetry/telemetry_client/telemetry_publisher.h"
 
 using namespace pos;
 
@@ -247,15 +249,33 @@ uint32_t
 UBlockDevice::_Empty(DeviceContext* deviceContext)
 {
     uint32_t totalCompletions = 0;
+    //TelemetryPublisher* tp = EasyTelemetryPublisherSingleton::Instance()->tp();
+
     if (nullptr != deviceContext)
     {
+        EasyTelemetryPublisherSingleton::Instance()->BufferIncrementCounter(TEL34008_UBLOCKDEV_DEVICECTX_EXIST_CNT);
         // Retry Logic decrease pendingError and increase PendingIOCount again.
         // So, we need to check both simultaneously
-        while (0 < deviceContext->GetPendingIOCount() + deviceContext->GetPendingErrorCount())
+        int pendingIoCnt = deviceContext->GetPendingIOCount();
+        int pendingErrCnt = deviceContext->GetPendingErrorCount();
+        while (0 < pendingIoCnt + pendingErrCnt )
         {
-            totalCompletions += driver->CompleteIOs(deviceContext);
-            totalCompletions += driver->CompleteErrors(deviceContext);
+            EasyTelemetryPublisherSingleton::Instance()->BufferUpdateGauge(TEL34008_UBLOCKDEV_PENDING_IO_CNT, pendingIoCnt);
+            EasyTelemetryPublisherSingleton::Instance()->BufferUpdateGauge(TEL34008_UBLOCKDEV_PENDING_ERROR_CNT, pendingErrCnt);
+
+            int completeIoCnt = driver->CompleteIOs(deviceContext);
+            int completeErrorsCnt = driver->CompleteErrors(deviceContext);
+            EasyTelemetryPublisherSingleton::Instance()->BufferIncrementCounter(TEL34008_UBLOCKDEV_COMPLETE_IO_CNT);
+            EasyTelemetryPublisherSingleton::Instance()->BufferIncrementCounter(TEL34008_UBLOCKDEV_COMPLETE_ERRORS_CNT);
+
+            totalCompletions += completeIoCnt;
+            totalCompletions += completeErrorsCnt;
+
+            pendingIoCnt = deviceContext->GetPendingIOCount();
+            pendingErrCnt = deviceContext->GetPendingErrorCount();
         }
+    } else {
+        EasyTelemetryPublisherSingleton::Instance()->BufferIncrementCounter(TEL34008_UBLOCKDEV_DEVICECTX_NULL_CNT);
     }
     return totalCompletions;
 }

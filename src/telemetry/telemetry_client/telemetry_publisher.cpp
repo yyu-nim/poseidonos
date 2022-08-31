@@ -175,6 +175,30 @@ TelemetryPublisher::PublishMetricList(POSMetricVector* metricList)
 }
 
 void
+TelemetryPublisher::IncrementCounter(std::string id_)
+{
+    POSMetric m(id_, MT_COUNT);
+    m.SetCountValue(1);
+    PublishMetric(m);
+}
+
+void
+TelemetryPublisher::IncrementCounter(std::string id_, uint64_t counts)
+{
+    POSMetric m(id_, MT_COUNT);
+    m.SetCountValue(counts);
+    PublishMetric(m);
+}
+
+void
+TelemetryPublisher::UpdateGauge(std::string id_, uint64_t v)
+{
+    POSMetric m(id_, MT_GAUGE);
+    m.SetGaugeValue(v);
+    PublishMetric(m);
+}
+
+void
 TelemetryPublisher::SetGlobalPublisher(IGlobalPublisher* gp)
 {
     globalPublisher = gp;
@@ -247,6 +271,8 @@ TelemetryPublisher::_RemoveMetricNotToPublish(POSMetricVector* metricList)
 bool
 TelemetryPublisher::_ShouldPublish(std::string metricId)
 {
+    return true; /*** Hard-code for now for debugging ***/
+
     if (selectivePublication == false)
     {
         return true;
