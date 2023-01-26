@@ -120,18 +120,21 @@ SegmentCtx::Init(void)
 
     uint32_t numSegments = addrInfo->GetnumUserAreaSegments();
     segmentInfos = new SegmentInfo[numSegments];
+    for (uint32_t i=0; i < numSegments; i+=1) {
+        segmentInfos[i].SetArrayId(this->arrayId);
+    }
 
     for (int state = SegmentState::START; state < SegmentState::NUM_STATES; state++)
     {
         if (segmentList[state] == nullptr)
         {
-            segmentList[state] = new SegmentList();
+            segmentList[state] = new SegmentList(this->arrayId, (SegmentState) state);
         }
     }
 
     if (rebuildList == nullptr)
     {
-        rebuildList = new SegmentList();
+        rebuildList = new SegmentList(this->arrayId, SegmentState::START /* don't care */);
     }
 
     _RebuildSegmentList();

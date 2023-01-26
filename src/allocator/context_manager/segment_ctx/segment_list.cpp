@@ -30,12 +30,13 @@
  *   OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
+#include "src/logger/logger.h"
 #include "src/allocator/context_manager/segment_ctx/segment_list.h"
 
 namespace pos
 {
-SegmentList::SegmentList(void)
-: numSegments(0)
+SegmentList::SegmentList(int arrayId, SegmentState state)
+: arrayId(arrayId), state(state), numSegments(0)
 {
 }
 
@@ -43,8 +44,10 @@ void
 SegmentList::Reset(void)
 {
     std::lock_guard<std::mutex> lock(m);
+    auto sizeBeforeClear = segments.size();
     segments.clear();
     numSegments = 0;
+    POS_TRACE_INFO(EID(ALLOCATOR_SEGMENTLIST_RESET), "SegmentList has been reset: {}. array_id: {}, state: {}, num_segments: {}", sizeBeforeClear, arrayId, state, numSegments);
 }
 
 SegmentId
@@ -64,6 +67,7 @@ SegmentList::PopSegment(void)
 
         segments.erase(it);
         numSegments = segments.size();
+        POS_TRACE_INFO(EID(ALLOCATOR_SEGMENTLIST_POP), "Segment {} has been popped. array_id: {}, state: {}, num_segments: {}", ret, arrayId, state, numSegments);
     }
 
     return ret;
@@ -73,8 +77,13 @@ void
 SegmentList::AddToList(SegmentId segId)
 {
     std::lock_guard<std::mutex> lock(m);
+    auto itor = segments.find(segId);
+    if (itor != segments.end()) {
+        POS_TRACE_WARN(EID(ALLOCATOR_SEGMENTLIST_DUPLICATED_ADD), "Segment {} exists already! array_id: {}, state: {}, num_segments: {}", segId, arrayId, state, numSegments);
+    }
     segments.insert(segId);
     numSegments = segments.size();
+    POS_TRACE_INFO(EID(ALLOCATOR_SEGMENTLIST_ADD), "Segment {} has been added. array_id: {}, state: {}, num_segments: {}", segId, arrayId, state, numSegments);
 }
 
 bool
@@ -90,6 +99,9 @@ SegmentList::RemoveFromList(SegmentId segId)
         numSegments = segments.size();
 
         removed = true;
+        POS_TRACE_INFO(EID(ALLOCATOR_SEGMENTLIST_REMOVE), "Segment {} has been removed. array_id: {}, state: {}, num_segments: {}", segId, arrayId, state, numSegments);
+    } else {
+        POS_TRACE_WARN(EID(ALLOCATOR_SEGMENTLIST_FAILED_TO_REMOVE), "Segment {} has been gone already! array_id: {}, state: {}, num_segments: {}", segId, arrayId, state, numSegments);
     }
 
     return removed;

@@ -49,7 +49,8 @@ SegmentInfo::SegmentInfo(void)
 SegmentInfo::SegmentInfo(uint32_t blkCount, uint32_t stripeCount, SegmentState segmentState)
 : validBlockCount(blkCount),
   occupiedStripeCount(stripeCount),
-  state(segmentState)
+  state(segmentState),
+  arrayId(-1)
 {
 }
 
@@ -138,7 +139,14 @@ void
 SegmentInfo::SetState(SegmentState newState)
 {
     std::lock_guard<std::mutex> lock(seglock);
+    SegmentState prevState = state;
     state = newState;
+    POS_TRACE_INFO(EID(ALLOCATOR_SEGINFO_SETSTATE), "{} -> {}, array_id: {}", prevState, state, arrayId);
+}
+
+void
+SegmentInfo::SetArrayId(int arrayId) {
+    this->arrayId = arrayId;
 }
 
 SegmentState
@@ -153,8 +161,9 @@ SegmentInfo::_MoveToFreeState(void)
 {
     occupiedStripeCount = 0;
     validBlockCount = 0;
-
+    SegmentState prevState = state;
     state = SegmentState::FREE;
+    POS_TRACE_INFO(EID(ALLOCATOR_SEGINFO_MOVE_TO_FREE), "{} -> {}, array_id: {}", prevState, state, arrayId);
 }
 
 void
@@ -169,7 +178,9 @@ SegmentInfo::MoveToNvramState(void)
         assert(false);
     }
 
+    SegmentState prevState = state;
     state = SegmentState::NVRAM;
+    POS_TRACE_INFO(EID(ALLOCATOR_SEGINFO_MOVE_TO_NVRAM), "{} -> {}, array_id: {}", prevState, state, arrayId);
 }
 
 bool
@@ -185,7 +196,9 @@ SegmentInfo::MoveToSsdStateOrFreeStateIfItBecomesEmpty(void)
     }
     else
     {
+        SegmentState prevState = state;
         state = SegmentState::SSD;
+        POS_TRACE_INFO(EID(ALLOCATOR_SEGINFO_MOVE_TO_SSD_OR_FREE), "{} -> {}, array_id: {}", prevState, state, arrayId);
         return false;
     }
 }
@@ -202,7 +215,9 @@ SegmentInfo::MoveToVictimState(void)
     }
     else
     {
+        SegmentState prevState = state;
         state = SegmentState::VICTIM;
+        POS_TRACE_INFO(EID(ALLOCATOR_SEGINFO_MOVE_TO_VICTIM), "{} -> {}, array_id: {}", prevState, state, arrayId);
 
         return true;
     }

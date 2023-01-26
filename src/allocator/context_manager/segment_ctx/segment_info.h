@@ -69,6 +69,7 @@ public:
 
     virtual void SetState(SegmentState newState);
     virtual SegmentState GetState(void);
+    virtual void SetArrayId(int arrayId);
 
     virtual void MoveToNvramState(void);
     virtual bool MoveToSsdStateOrFreeStateIfItBecomesEmpty(void);
@@ -84,6 +85,7 @@ private:
 
     std::mutex seglock;
     SegmentState state;
+    int arrayId;
 };
 
 } // namespace pos
