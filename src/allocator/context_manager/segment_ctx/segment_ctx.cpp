@@ -175,6 +175,10 @@ SegmentCtx::Dispose(void)
     initialized = false;
 }
 
+/***
+ * NOTE: the caller must acquire "segCtxLock" before calling this method to avoid race condition
+ *  just as in the case of ALlocateFreeSegment.
+ */
 void
 SegmentCtx::MoveToFreeState(SegmentId segId)
 {
@@ -428,6 +432,11 @@ SegmentCtx::AllocateSegment(SegmentId segId)
     segmentInfos[segId].MoveToNvramState();
 }
 
+/***
+ * NOTE: the caller must acquire "segCtxLock" before calling this method to avoid race condition
+ *  between GcFlushSubmission and Copier, both of which trying to add the same segment to FREE list.
+ * @return the segment ID that has been newly allocated for either user or GC write.
+ */
 SegmentId
 SegmentCtx::AllocateFreeSegment(void)
 {

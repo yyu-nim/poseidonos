@@ -325,7 +325,12 @@ Copier::_CleanUpVictimSegments(void)
         if (0 == validCount && UNMAP_SEGMENT != victimSegId)
         {
             // Push to free list among the victim lists
-            segmentCtx->MoveToFreeState(victimSegId);
+            {
+                // We are intentionally scoping segCtxLock to the current code block
+                std::lock_guard<mutex> segCtxLock( segmentCtx->GetCtxLock() );
+                segmentCtx->MoveToFreeState(victimSegId);
+            }
+
             SegmentContextUpdater* segmentCtxUpdater = (SegmentContextUpdater*)iContextManager->GetSegmentContextUpdaterPtr();
             segmentCtxUpdater->ResetInfos(victimSegId);
             POS_TRACE_INFO(EID(GC_RELEASE_VICTIM_SEGMENT),
