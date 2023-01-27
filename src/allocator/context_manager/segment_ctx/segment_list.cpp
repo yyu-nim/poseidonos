@@ -47,7 +47,8 @@ SegmentList::Reset(void)
     auto sizeBeforeClear = segments.size();
     segments.clear();
     numSegments = 0;
-    POS_TRACE_INFO(EID(ALLOCATOR_SEGMENTLIST_RESET), "SegmentList has been reset: {}. array_id: {}, state: {}, num_segments: {}", sizeBeforeClear, arrayId, state, numSegments);
+    POS_TRACE_INFO(EID(ALLOCATOR_SEGMENTLIST_RESET), "prev_size: {}, array_id: {}, state: {}, num_segments: {}",
+        sizeBeforeClear, arrayId, SegmentInfo::ToSegmentStateString(state), numSegments);
 }
 
 SegmentId
@@ -67,7 +68,8 @@ SegmentList::PopSegment(void)
 
         segments.erase(it);
         numSegments = segments.size();
-        POS_TRACE_INFO(EID(ALLOCATOR_SEGMENTLIST_POP), "Segment {} has been popped. array_id: {}, state: {}, num_segments: {}", ret, arrayId, state, numSegments);
+        POS_TRACE_INFO(EID(ALLOCATOR_SEGMENTLIST_POP), "segment_id: {}, array_id: {}, state: {}, num_segments: {}",
+            ret, arrayId, SegmentInfo::ToSegmentStateString(state), numSegments);
     }
 
     return ret;
@@ -79,11 +81,13 @@ SegmentList::AddToList(SegmentId segId)
     std::lock_guard<std::mutex> lock(m);
     auto itor = segments.find(segId);
     if (itor != segments.end()) {
-        POS_TRACE_WARN(EID(ALLOCATOR_SEGMENTLIST_DUPLICATED_ADD), "Segment {} exists already! array_id: {}, state: {}, num_segments: {}", segId, arrayId, state, numSegments);
+        POS_TRACE_WARN(EID(ALLOCATOR_SEGMENTLIST_DUPLICATED_ADD), "segment_id: {}, array_id: {}, state: {}, num_segments: {}",
+            segId, arrayId, SegmentInfo::ToSegmentStateString(state), numSegments);
     }
     segments.insert(segId);
     numSegments = segments.size();
-    POS_TRACE_INFO(EID(ALLOCATOR_SEGMENTLIST_ADD), "Segment {} has been added. array_id: {}, state: {}, num_segments: {}", segId, arrayId, state, numSegments);
+    POS_TRACE_INFO(EID(ALLOCATOR_SEGMENTLIST_ADD), "segment_id: {}, array_id: {}, state: {}, num_segments: {}",
+        segId, arrayId, SegmentInfo::ToSegmentStateString(state), numSegments);
 }
 
 bool
@@ -99,9 +103,11 @@ SegmentList::RemoveFromList(SegmentId segId)
         numSegments = segments.size();
 
         removed = true;
-        POS_TRACE_INFO(EID(ALLOCATOR_SEGMENTLIST_REMOVE), "Segment {} has been removed. array_id: {}, state: {}, num_segments: {}", segId, arrayId, state, numSegments);
+        POS_TRACE_INFO(EID(ALLOCATOR_SEGMENTLIST_REMOVE), "segment_id: {}, array_id: {}, state: {}, num_segments: {}",
+            segId, arrayId, SegmentInfo::ToSegmentStateString(state), numSegments);
     } else {
-        POS_TRACE_WARN(EID(ALLOCATOR_SEGMENTLIST_FAILED_TO_REMOVE), "Segment {} has been gone already! array_id: {}, state: {}, num_segments: {}", segId, arrayId, state, numSegments);
+        POS_TRACE_WARN(EID(ALLOCATOR_SEGMENTLIST_FAILED_TO_REMOVE), "segment_id: {}, array_id: {}, state: {}, num_segments: {}",
+            segId, arrayId, SegmentInfo::ToSegmentStateString(state), numSegments);
     }
 
     return removed;

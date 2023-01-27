@@ -50,7 +50,8 @@ SegmentInfo::SegmentInfo(uint32_t blkCount, uint32_t stripeCount, SegmentState s
 : validBlockCount(blkCount),
   occupiedStripeCount(stripeCount),
   state(segmentState),
-  arrayId(-1)
+  arrayId(-1),
+  segmentId(0)
 {
 }
 
@@ -109,7 +110,7 @@ SegmentInfo::DecreaseValidBlockCount(uint32_t dec, bool allowVictimSegRelease)
     else if (decreased < 0)
     {
         POS_TRACE_ERROR(EID(VALID_COUNT_UNDERFLOWED),
-            "Valid block count decreasedCount:{} total validCount:{} : UNDERFLOWED", dec, decreased);
+            "Valid block count decreasedCount:{} total validCount:{} segmentId:{} : UNDERFLOWED", dec, decreased, segmentId);
         return {false, SegmentState::ERROR};
     }
 
@@ -141,12 +142,19 @@ SegmentInfo::SetState(SegmentState newState)
     std::lock_guard<std::mutex> lock(seglock);
     SegmentState prevState = state;
     state = newState;
-    POS_TRACE_INFO(EID(ALLOCATOR_SEGINFO_SETSTATE), "{} -> {}, array_id: {}", prevState, state, arrayId);
+    POS_TRACE_INFO(EID(ALLOCATOR_SEGINFO_SETSTATE), "segment_id: {}, prev_state: {}, next_state: {}, array_id: {}",
+        segmentId, ToSegmentStateString(prevState), ToSegmentStateString(state), arrayId);
 }
 
 void
 SegmentInfo::SetArrayId(int arrayId) {
     this->arrayId = arrayId;
+}
+
+void
+SegmentInfo::SetSegmentId(SegmentId segmentId)
+{
+    this->segmentId = segmentId;
 }
 
 SegmentState
@@ -163,7 +171,8 @@ SegmentInfo::_MoveToFreeState(void)
     validBlockCount = 0;
     SegmentState prevState = state;
     state = SegmentState::FREE;
-    POS_TRACE_INFO(EID(ALLOCATOR_SEGINFO_MOVE_TO_FREE), "{} -> {}, array_id: {}", prevState, state, arrayId);
+    POS_TRACE_INFO(EID(ALLOCATOR_SEGINFO_MOVE_TO_FREE), "segment_id: {}, prev_state: {}, next_state: {}, array_id: {}",
+        segmentId, ToSegmentStateString(prevState), ToSegmentStateString(state), arrayId);
 }
 
 void
@@ -173,14 +182,15 @@ SegmentInfo::MoveToNvramState(void)
     if (state != SegmentState::FREE)
     {
         POS_TRACE_ERROR(EID(UNKNOWN_ALLOCATOR_ERROR),
-            "Failed to move to NVRAM state. Segment state {} valid count {} occupied stripe count {}",
-            state, validBlockCount, occupiedStripeCount);
+            "Failed to move to NVRAM state. Segment state {} valid count {} occupied stripe count {} segmentId {} arrayId {}",
+            ToSegmentStateString(state), validBlockCount, occupiedStripeCount, segmentId, arrayId);
         assert(false);
     }
 
     SegmentState prevState = state;
     state = SegmentState::NVRAM;
-    POS_TRACE_INFO(EID(ALLOCATOR_SEGINFO_MOVE_TO_NVRAM), "{} -> {}, array_id: {}", prevState, state, arrayId);
+    POS_TRACE_INFO(EID(ALLOCATOR_SEGINFO_MOVE_TO_NVRAM), "segment_id: {}, prev_state: {}, next_state: {}, array_id: {}",
+        segmentId, ToSegmentStateString(prevState), ToSegmentStateString(state), arrayId);
 }
 
 bool
@@ -198,7 +208,8 @@ SegmentInfo::MoveToSsdStateOrFreeStateIfItBecomesEmpty(void)
     {
         SegmentState prevState = state;
         state = SegmentState::SSD;
-        POS_TRACE_INFO(EID(ALLOCATOR_SEGINFO_MOVE_TO_SSD_OR_FREE), "{} -> {}, array_id: {}", prevState, state, arrayId);
+        POS_TRACE_INFO(EID(ALLOCATOR_SEGINFO_MOVE_TO_SSD_OR_FREE), "segment_id: {}, prev_state: {}, next_state: {}, array_id: {}",
+            segmentId, ToSegmentStateString(prevState), ToSegmentStateString(state), arrayId);
         return false;
     }
 }
@@ -210,14 +221,15 @@ SegmentInfo::MoveToVictimState(void)
     if (state != SegmentState::SSD)
     {
         POS_TRACE_ERROR(EID(UNKNOWN_ALLOCATOR_ERROR),
-            "Cannot move to victim state as it's not SSD state, state: {}", state);
+            "Cannot move to victim state as it's not SSD state, state: {}, segment_id: {}, array_id: {}", ToSegmentStateString(state), segmentId, arrayId);
         return false;
     }
     else
     {
         SegmentState prevState = state;
         state = SegmentState::VICTIM;
-        POS_TRACE_INFO(EID(ALLOCATOR_SEGINFO_MOVE_TO_VICTIM), "{} -> {}, array_id: {}", prevState, state, arrayId);
+        POS_TRACE_INFO(EID(ALLOCATOR_SEGINFO_MOVE_TO_VICTIM), "segment_id: {}, prev_state: {}, next_state: {}, array_id: {}",
+            segmentId, ToSegmentStateString(prevState), ToSegmentStateString(state), arrayId);
 
         return true;
     }
@@ -237,4 +249,26 @@ SegmentInfo::GetValidBlockCountIfSsdState(void)
     }
 }
 
+std::string
+SegmentInfo::ToSegmentStateString(SegmentState state) {
+    string stateStr = "Init";
+    switch(state) {
+        case SegmentState::FREE:
+            stateStr = "FREE";
+            break;
+        case SegmentState::NVRAM:
+            stateStr = "NVRAM";
+            break;
+        case SegmentState::SSD:
+            stateStr = "SSD";
+            break;
+        case SegmentState::VICTIM:
+            stateStr = "VICTIM";
+            break;
+        default:
+            stateStr = "OTHER_" + std::to_string(state);
+            break;
+    }
+    return stateStr;
+}
 } // namespace pos
