@@ -171,7 +171,10 @@ ContextManagerIntegrationTest::SetUp(void)
         maxOccupiedStripeCount, SegmentState::SSD);
     for(int i=0;i<numOfSegment;++i)
     {
-        segInfosForSegCtx[i].AllocateSegmentInfoData(&segInfoDataForSegCtx[i]);
+        segInfosForSegCtx[i].AllocateAndInitSegmentInfoData(&segInfoDataForSegCtx[i]);
+        segInfosForSegCtx[i].SetValidBlockCount(validBlockCount);
+        segInfosForSegCtx[i].SetOccupiedStripeCount(maxOccupiedStripeCount);
+        segInfosForSegCtx[i].SetState(SegmentState::SSD);
     }
 
     segCtx = new SegmentCtx(tp, reCtx, addrInfo, gcCtx, arrayId, segInfosForSegCtx);
@@ -188,7 +191,7 @@ ContextManagerIntegrationTest::SetUp(void)
     loadedSegInfoDataForSegCtx = new SegmentInfoData[numOfSegment](0, 0, SegmentState::FREE);
     for(int i=0;i<numOfSegment;++i)
     {
-        loadedSegInfos[i].AllocateSegmentInfoData(&loadedSegInfoDataForSegCtx[i]);
+        loadedSegInfos[i].AllocateAndInitSegmentInfoData(&loadedSegInfoDataForSegCtx[i]);
     }
 
     std::vector<std::shared_ptr<VersionedSegmentInfo>> versionedSegmentInfo;

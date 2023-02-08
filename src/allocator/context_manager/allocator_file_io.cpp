@@ -256,6 +256,8 @@ AllocatorFileIo::_AfterLoad(char* buffer)
     int result = numFilesReading.fetch_sub(1) - 1;
     assert(result >= 0);
 
+    POS_TRACE_INFO(EID(ALLOCATOR_META_ASYNCLOAD), "[AllocatorLoad] try to load section data");
+
     _LoadSectionData(buffer);
     client->AfterLoad(buffer);
 }

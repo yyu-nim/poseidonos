@@ -156,8 +156,7 @@ TEST_F(SegmentCtxIntegrationTest, UpdateSegmentList_IfTargetSegmentInvalidatedBy
     SegmentInfoData* segmentInfoData = new SegmentInfoData[numOfSegment];
     for (int i = 0; i < numOfSegment; ++i)
     {
-        segInfos[i].AllocateSegmentInfoData(&segmentInfoData[i]);
-        segInfos[i].InitSegmentInfoData();
+        segInfos[i].AllocateAndInitSegmentInfoData(&segmentInfoData[i]);
         segInfos[i].SetValidBlockCount(maxValidBlockCount);
         segInfos[i].SetOccupiedStripeCount(maxOccupiedStripeCount);
         segInfos[i].SetState(SegmentState::SSD);

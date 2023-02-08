@@ -123,8 +123,7 @@ SegmentCtx::Init(void)
     segmentInfoData = new SegmentInfoData[numSegments];
     for (uint32_t i = 0; i < numSegments ; ++i)
     {
-        segmentInfos[i].AllocateSegmentInfoData(&segmentInfoData[i]);
-        segmentInfos[i].InitSegmentInfoData();
+        segmentInfos[i].AllocateAndInitSegmentInfoData(&segmentInfoData[i]);
     }
 
     for (int state = SegmentState::START; state < SegmentState::NUM_STATES; state++)
