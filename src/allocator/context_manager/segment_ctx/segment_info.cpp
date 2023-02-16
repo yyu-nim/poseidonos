@@ -237,5 +237,30 @@ SegmentInfo::UpdateFrom(SegmentInfo &segmentInfo)
     this->data->state = segmentInfo.data->state;
 }
 
+void
+SegmentInfoData::ToBytes(char* destBuf) {
+    pos_bc::SegmentInfoDataProto proto;
+    proto.set_valid_block_count( this->validBlockCount );
+    proto.set_occupied_stripe_count( this->occupiedStripeCount );
+    proto.set_state( (pos_bc::SegmentState) this->state );
+    proto.SerializeToArray(destBuf, ONSSD_SIZE);
+}
+
+SegmentInfoData*
+SegmentInfoData::FromBytes(const char* bytesArray, const size_t numElements) {
+    SegmentInfoData* listOfSegmentInfoData = new SegmentInfoData[numElements];
+
+    for(unsigned int i=0; i<numElements; i++) {
+        pos_bc::SegmentInfoDataProto proto;
+        proto.ParseFromArray(bytesArray + ONSSD_SIZE * i, ONSSD_SIZE);
+        listOfSegmentInfoData[i].Set(
+            proto.valid_block_count(), 
+            proto.occupied_stripe_count(), 
+            (SegmentState) proto.state()
+        );
+    }
+
+    return listOfSegmentInfoData;
+}
 
 } // namespace pos

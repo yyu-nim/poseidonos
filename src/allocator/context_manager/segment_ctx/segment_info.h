@@ -37,6 +37,7 @@
 #include <utility>
 
 #include "src/include/address_type.h"
+#include "proto/generated/cpp/pos_bc.pb.h"
 
 namespace pos
 {
@@ -65,11 +66,23 @@ public:
 
     SegmentInfoData(uint32_t validBlockCount, uint32_t occupiedStripeCount, SegmentState segmentState)
     {
+        this->Set(validBlockCount, occupiedStripeCount, segmentState);
+    }
+
+    void Set(uint32_t validBlockCount, uint32_t occupiedStripeCount, SegmentState segmentState) {
         this->validBlockCount = validBlockCount;
         this->occupiedStripeCount = occupiedStripeCount;
         this->state = segmentState;
     }
 
+    // The fixed size for a single SegmentInfoDataProto
+    const static size_t ONSSD_SIZE = 128; // in bytes
+
+    // Serialize a single SegmentInfoData
+    void ToBytes(char* destBuf);
+
+    // Deserialize multiple SegmentInfoData(s) and return the pointer of the first element
+    static SegmentInfoData* FromBytes(const char* bytesArray, const size_t numElements);
 };
 
 class SegmentInfo
