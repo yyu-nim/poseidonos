@@ -43,7 +43,7 @@ class ContextSectionForArray : public ContextSection<T>
 {
 public:
     // e.g., T = SegmentInfoData* (array of SegmentInfoData)
-    void InitAddressInfoWithArray(T array, size_t elementSize, size_t numElements)
+    void InitAddressInfoWithArray(T array, size_t elementSize, unsigned int numElements)
     {
         this->data = array;
         this->elementSize = elementSize;
@@ -52,26 +52,26 @@ public:
         this->info.size = elementSize * numElements;
     }
 
-    void CopyTo(char* buf) override
+    void CopyTo(char* buf)
     {
-        for(int i=0; i < this->numElements; i++)
+        for(unsigned int i=0; i < this->numElements; i++)
         {
             char* destBuf = buf + i * elementSize;
-            data[i].ToBytes(destBuf);
+            this->data[i].ToBytes(destBuf);
         }
     }
 
-    void CopyFrom(char* buf) override
+    void CopyFrom(char* buf)
     {
-        for(int i=0; i < this->numElements; i++)
+        for(unsigned int i=0; i < this->numElements; i++)
         {
             const char* srcBuf = buf + i * elementSize;
-            data[i].FromBytes(srcBuf);
+            this->data[i].FromBytes(srcBuf);
         }
     }
 
 protected:
     size_t elementSize;
-    size_t numElements;
+    unsigned int numElements;
 };
 } // namespace pos

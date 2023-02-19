@@ -195,11 +195,11 @@ SegmentCtx::_UpdateSectionInfo(void)
     // currentOffset += segmentInfoData.GetSectionSize();
 
     // SC_SEGMENT_INFO V2
-    this->segmentInfoDataV2.InitAddressInfoWithArray(
-        this->segmentInfoDataV2.data,
-        this->segmentInfoDataV2.elementSize,
-        this->segmentInfoDataV2.numElements
-    );
+    // this->segmentInfoDataV2.InitAddressInfoWithArray(
+    //     this->segmentInfoDataV2.data,
+    //     this->segmentInfoDataV2.elementSize,
+    //     this->segmentInfoDataV2.numElements
+    // );
     currentOffset += this->segmentInfoDataV2.GetSectionSize();
 
     totalDataSize = currentOffset;
@@ -219,10 +219,16 @@ SegmentCtx::Dispose(void)
         segmentInfos = nullptr;
     }
 
-    if (segmentInfoData.data != nullptr)
+    // if (segmentInfoData.data != nullptr)
+    // {
+    //     delete[] segmentInfoData.data;
+    //     segmentInfoData.data = nullptr;
+    // }
+
+    if (this->segmentInfoDataV2.data != nullptr)
     {
-        delete[] segmentInfoData.data;
-        segmentInfoData.data = nullptr;
+        delete[] segmentInfoDataV2.data;
+        segmentInfoDataV2.data = nullptr;
     }
 
     for (int state = SegmentState::FREE; state < SegmentState::NUM_STATES; state++)
@@ -378,7 +384,8 @@ SegmentCtx::AfterLoad(char* buf)
     // SC_HEADER
     ctxHeader.CopyFrom(buf);
     // SC_SEGMENT_INFO
-    segmentInfoData.CopyFrom(buf);
+    // segmentInfoData.CopyFrom(buf);
+    segmentInfoDataV2.CopyFrom(buf);
 
     POS_TRACE_DEBUG(EID(ALLOCATOR_FILE_LOAD_ERROR),
         "SegmentCtx file loaded:{}", ctxHeader.data.ctxVersion);
@@ -418,7 +425,8 @@ SegmentCtx::BeforeFlush(char* buf)
     // SC_HEADER
     ctxHeader.CopyTo(buf);
     // SC_SEGMENT_INFO
-    segmentInfoData.CopyTo(buf);
+    // segmentInfoData.CopyTo(buf);
+    segmentInfoDataV2.CopyTo(buf);
 }
 
 void
@@ -443,7 +451,8 @@ SegmentCtx::GetSectionInfo(int section)
     }
     else if (section == SC_SEGMENT_INFO)
     {
-        return segmentInfoData.GetSectionInfo();
+        // return segmentInfoData.GetSectionInfo();
+        return segmentInfoDataV2.GetSectionInfo();
     }
     else
     {
@@ -472,7 +481,8 @@ SegmentCtx::GetNumSections(void)
 uint64_t
 SegmentCtx::GetTotalDataSize(void)
 {
-    return ctxHeader.GetSectionSize() + segmentInfoData.GetSectionSize();
+    //return ctxHeader.GetSectionSize() + segmentInfoData.GetSectionSize();
+    return ctxHeader.GetSectionSize() + segmentInfoDataV2.GetSectionSize();
 }
 
 SegmentState
