@@ -76,7 +76,7 @@ SegmentCtx::SegmentCtx(TelemetryPublisher* tp_, SegmentCtxHeader* header, Segmen
         for (uint32_t segId = 0; segId < numSegments; segId++)
         {
             segmentInfos[segId].AllocateSegmentInfoData(&segmentInfoData_[segId]);
-            segmentInfos[segId].InitSegmentInfoData(); // added by yyu
+            //segmentInfos[segId].InitSegmentInfoData(); // added by yyu
         }
 
         // Initialize the context section address information
