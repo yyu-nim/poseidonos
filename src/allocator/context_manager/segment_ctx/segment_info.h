@@ -81,6 +81,9 @@ public:
     // Serialize a single SegmentInfoData
     void ToBytes(char* destBuf);
 
+    // Deserialize a single SegmentInfoData
+    void FromBytes(const char* srcBuf);
+
     // Deserialize multiple SegmentInfoData(s) and return the pointer of the first element
     static SegmentInfoData* FromBytes(const char* bytesArray, const size_t numElements);
 };

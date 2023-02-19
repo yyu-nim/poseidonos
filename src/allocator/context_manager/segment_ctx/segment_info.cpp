@@ -246,8 +246,21 @@ SegmentInfoData::ToBytes(char* destBuf) {
     proto.SerializeToArray(destBuf, ONSSD_SIZE);
 }
 
+void
+SegmentInfoData::FromBytes(const char* srcBuf)
+{
+    pos_bc::SegmentInfoDataProto proto;
+    proto.ParseFromArray(srcBuf, ONSSD_SIZE);
+    this->Set(
+        proto.valid_block_count(), 
+        proto.occupied_stripe_count(), 
+        (SegmentState) proto.state()
+    );
+}
+
 SegmentInfoData*
-SegmentInfoData::FromBytes(const char* bytesArray, const size_t numElements) {
+SegmentInfoData::FromBytes(const char* bytesArray, const size_t numElements)
+{
     SegmentInfoData* listOfSegmentInfoData = new SegmentInfoData[numElements];
 
     for(unsigned int i=0; i<numElements; i++) {

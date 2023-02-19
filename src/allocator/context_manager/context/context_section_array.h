@@ -39,39 +39,36 @@
 namespace pos
 {
 template<typename T>
-class ContextSectionForDynamicArray : public ContextSection<T>
+class ContextSectionForArray : public ContextSection<T>
 {
 public:
-    // e.g., T = SegmentInfoData* (dynamic-sized array)
-    void InitAddressInfoWithDynamicArray(char* addr, size_t elementSize, size_t numElements)
+    // e.g., T = SegmentInfoData* (array of SegmentInfoData)
+    void InitAddressInfoWithArray(T array, size_t elementSize, size_t numElements)
     {
-        this->dataAddress = addr;
+        this->data = array;
         this->elementSize = elementSize;
         this->numElements = numElements;
+        this->info.offset = 0;
+        this->info.size = elementSize * numElements;
     }
 
     void CopyTo(char* buf) override
     {
-        // src = dataAddress
-        // dest = buf + addr.offset
-        // size = addr.size
-        // memcpy((buf + info.offset), dataAddress, info.size);
+        for(int i=0; i < this->numElements; i++)
+        {
+            char* destBuf = buf + i * elementSize;
+            data[i].ToBytes(destBuf);
+        }
     }
 
     void CopyFrom(char* buf) override
     {
-        // src = buf + addr.offset
-        // dest = dataAddress
-        // size = addr.size
-        // memcpy(dataAddress, (buf + info.offset), info.size);
+        for(int i=0; i < this->numElements; i++)
+        {
+            const char* srcBuf = buf + i * elementSize;
+            data[i].FromBytes(srcBuf);
+        }
     }
-
-    uint64_t GetSectionSize(void)
-    {
-        return 0;
-        //return info.size;
-    }
-
 
 protected:
     size_t elementSize;

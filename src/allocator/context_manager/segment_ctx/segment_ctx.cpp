@@ -71,16 +71,24 @@ SegmentCtx::SegmentCtx(TelemetryPublisher* tp_, SegmentCtxHeader* header, Segmen
     {
         uint32_t numSegments = addrInfo->GetnumUserAreaSegments();
 
-        segmentInfoData.data = segmentInfoData_;
+        //segmentInfoData.data = segmentInfoData_;
         segmentInfos = new SegmentInfo[numSegments];
         for (uint32_t segId = 0; segId < numSegments; segId++)
         {
-            segmentInfos[segId].AllocateSegmentInfoData(&segmentInfoData.data[segId]);
+            segmentInfos[segId].AllocateSegmentInfoData(&segmentInfoData_[segId]);
+            segmentInfos[segId].InitSegmentInfoData(); // added by yyu
         }
+
+        // Initialize the context section address information
+        this->segmentInfoDataV2.InitAddressInfoWithArray(
+            segmentInfoData_,
+            SegmentInfoData::ONSSD_SIZE,
+            numSegments);
     }
     else
     {
-        segmentInfoData.data = nullptr;
+        //segmentInfoData.data = nullptr;
+        this->segmentInfoDataV2.data = nullptr;
     }
 
     if (header != nullptr)
@@ -132,16 +140,24 @@ SegmentCtx::Init(void)
     ctxStoredVersion = 0;
     ctxDirtyVersion = 0;
 
-    if (segmentInfoData.data == nullptr)
+    if (this->segmentInfoDataV2.data == nullptr)
     {
         uint32_t numSegments = addrInfo->GetnumUserAreaSegments();
         segmentInfos = new SegmentInfo[numSegments];
-        segmentInfoData.data = new SegmentInfoData[numSegments];
+        //segmentInfoData.data = new SegmentInfoData[numSegments];
+        auto segmentInfoDataArray = new SegmentInfoData[numSegments];
         for (uint32_t i = 0; i < numSegments ; ++i)
         {
-            segmentInfos[i].AllocateSegmentInfoData(&(segmentInfoData.data[i]));
+            segmentInfos[i].AllocateSegmentInfoData(&segmentInfoDataArray[i]);
             segmentInfos[i].InitSegmentInfoData();
         }
+
+        //this->segmentInfoDataV2.data = segmentInfoData.data;
+        this->segmentInfoDataV2.InitAddressInfoWithArray(
+            segmentInfoDataArray,
+            SegmentInfoData::ONSSD_SIZE,
+            numSegments
+        );
     }
 
     for (int state = SegmentState::START; state < SegmentState::NUM_STATES; state++)
@@ -173,10 +189,18 @@ SegmentCtx::_UpdateSectionInfo(void)
     currentOffset += ctxHeader.GetSectionSize();
 
     // SC_SEGMENT_INFO
-    uint64_t segmentInfoSize = sizeof(SegmentInfoData) * addrInfo->GetnumUserAreaSegments();
-    segmentInfoData.InitAddressInfo(
-        (char*)segmentInfoData.data, currentOffset, segmentInfoSize);
-    currentOffset += segmentInfoData.GetSectionSize();
+    // uint64_t segmentInfoSize = sizeof(SegmentInfoData) * addrInfo->GetnumUserAreaSegments();
+    // segmentInfoData.InitAddressInfo(
+    //     (char*)segmentInfoData.data, currentOffset, segmentInfoSize);
+    // currentOffset += segmentInfoData.GetSectionSize();
+
+    // SC_SEGMENT_INFO V2
+    this->segmentInfoDataV2.InitAddressInfoWithArray(
+        this->segmentInfoDataV2.data,
+        this->segmentInfoDataV2.elementSize,
+        this->segmentInfoDataV2.numElements
+    );
+    currentOffset += this->segmentInfoDataV2.GetSectionSize();
 
     totalDataSize = currentOffset;
 }
